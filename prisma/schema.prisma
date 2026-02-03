@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-py"
+  recursive_type_depth = -1
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model battles {
+  id                     BigInt   @id @default(autoincrement())
+  start_height           Int
+  rounds                 Int
+  contenders_pv          Int
+  contender_1_address    String
+  contender_2_address    String
+  contender_1_name       String
+  contender_2_name       String
+  is_finished            Boolean  @default(false)
+  are_addresses_privates Boolean  @default(false)
+  all_rounds             rounds[]
+}
+
+model rounds {
+  battle_id             BigInt
+  block_height          Int
+  contender_1_best_diff Int       @default(0)
+  contender_2_best_diff Int       @default(0)
+  winner                Int?      @db.SmallInt
+  damage                Int?
+  finalized_at          DateTime? @db.Timestamp(6)
+  all_battles           battles   @relation(fields: [battle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([battle_id, block_height])
+}

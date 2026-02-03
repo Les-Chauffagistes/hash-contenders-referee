@@ -1,0 +1,10 @@
+asyncpg
+aiohttp
+pytest
+pytest-asyncio
+cachetools
+aiohttp_cors
+python_dotenv
+websockets
+pytest-cov
+zon
