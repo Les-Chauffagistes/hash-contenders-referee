@@ -1,4 +1,5 @@
 name: build-and-release
+
 on:
   push:
     branches: [main]
@@ -6,21 +7,6 @@ on:
 jobs:
   test:
     runs-on: [self-hosted, macOS]
-
-    services:
-      postgres:
-        image: postgres:18.1-alpine3.23
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: referee_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=5
 
     steps:
       - uses: actions/checkout@v4
@@ -32,25 +18,41 @@ jobs:
           pip install -r requirements.txt
           pip install prisma
 
-      - name: Setup database
-        env:
-          DATABASE_URL: postgresql://localhost:5432/referee_test
+      - name: Start PostgreSQL (Docker)
         run: |
-          createdb referee_test 2>/dev/null || true
+          docker rm -f pg-test 2>/dev/null || true
+
+          docker run -d \
+            --name pg-test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=referee_test \
+            -p 5431:5432 \
+            postgres:16
+
+          # attente readiness
+          until docker exec pg-test pg_isready -U postgres; do
+            sleep 1
+          done
+
+      - name: Setup database schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5431/referee_test
+        run: |
           source venv/bin/activate
           prisma db push --skip-generate
           prisma generate
 
       - name: Run tests
         env:
-          DATABASE_URL: postgresql://localhost:5432/referee_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5431/referee_test
         run: |
           source venv/bin/activate
           PYTHONPATH=. pytest tests/ -v
 
-      - name: Cleanup
+      - name: Cleanup PostgreSQL
         if: always()
-        run: dropdb referee_test 2>/dev/null || true
+        run: docker rm -f pg-test || true
 
   build:
     needs: test
@@ -73,36 +75,35 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-          # Setup credential helper pour utiliser le token
+
           git remote set-url origin https://github.com/Les-Chauffagistes/hash-contenders-referee.git
           git config credential.helper '!f() { echo "username=x-access-token"; echo "password=$GITHUB_PAT"; }; f'
-      
+
           git tag v$TS
           git push origin v$TS
 
       - name: Create GitHub Release
-        id: create_release
         uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}
         with:
           tag_name: "v${{ env.TS }}"
           release_name: "Release ${{ env.TS }}"
           body: "Automated release ${{ env.TS }}"
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}
 
       - name: Upload artifact to release
         uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}
         with:
           files: artifact/referee.chauffagistes-${{ env.TS }}.tar.gz
           tag_name: v${{ env.TS }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}
 
       - name: notify-deploy
         run: |
           curl -X POST ${{ secrets.DEPLOY_URL }} \
             -H "X-Deploy-Token: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}" \
-            -d '{"repository": {"full_name": "Les-Chauffagistes/Les-Chauffagistes/hash-contenders-referee"}}'
+            -H "Content-Type: application/json" \
+            -d '{"repository": {"full_name": "Les-Chauffagistes/hash-contenders-referee"}}'
