@@ -81,11 +81,20 @@ jobs:
 
           git tag v$TS
           git push origin v$TS
+      
+      - name: Debug token presence
+        run: |
+          if [ -z "${{ secrets.GLOBAL_DEPLOY_TOKEN }}" ]; then
+            echo "TOKEN EMPTY"
+            exit 1
+          else
+            echo "TOKEN OK"
+          fi
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         with:
           tag_name: "v${{ env.TS }}"
           release_name: "Release ${{ env.TS }}"
