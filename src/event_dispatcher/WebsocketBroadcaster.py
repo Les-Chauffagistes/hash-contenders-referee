@@ -42,3 +42,14 @@ class WebsocketBroadcaster:
                 "contender_2_pv": contender_2_pv
             },
     )
+
+    async def battle_end(self, battle: battles, winner: int, contender_1_pv: int, contender_2_pv: int):
+        await self.client_websockets.broadcast(
+            battle.id,
+            {
+                "type": "BATTLE_END",
+                "winner": winner,
+                "contender_1_pv": contender_1_pv,
+                "contender_2_pv": contender_2_pv,
+            },
+    )

@@ -134,6 +134,13 @@ class Referee:
     async def on_share(self, battle: battles, payload: Share):
         block_height = int(payload.round, 16)
 
+        # Ignorer les shares si la bataille est terminée
+        if battle.is_finished:
+            self.log.debug(
+                f"Ignoring share for battle {battle.id}, battle is already finished"
+            )
+            return
+
         # Ignorer les shares avant le début de la bataille
         if block_height < battle.start_height:
             self.log.debug(
@@ -142,7 +149,18 @@ class Referee:
             )
             return
 
-        # 1. Finaliser les rounds précédents
+        closed_rounds = await self._finalize_and_broadcast(battle, block_height)
+
+        if closed_rounds and await self._check_ko(battle):
+            return
+
+        if not await self._ensure_round_exists(battle, block_height, payload):
+            return
+
+        await self._update_best_share(battle, block_height, payload)
+
+    async def _finalize_and_broadcast(self, battle: battles, block_height: int) -> list:
+        """Finalise les rounds précédents et broadcast hit_result pour chacun."""
         closed_rounds = await self.finalize_rounds(battle.id, block_height)
         for r in closed_rounds:
             pv1, pv2 = await self.compute_pv(battle)
@@ -153,10 +171,32 @@ class Referee:
                 contender_1_best_diff=r["contender_1_best_diff"],
                 contender_2_best_diff=r["contender_2_best_diff"],
                 contender_1_pv=pv1,
-                contender_2_pv=pv2
+                contender_2_pv=pv2,
             )
+        return closed_rounds
 
-        # 2. Vérifier si le round existe déjà pour cette hauteur de bloc
+    async def _check_ko(self, battle: battles) -> bool:
+        """Vérifie si un contender est KO (PV ≤ 0). Renvoie True si la bataille est terminée."""
+        pv1, pv2 = await self.compute_pv(battle)
+        if pv1 <= 0 or pv2 <= 0:
+            winner = 1 if pv2 <= 0 else 2
+            await self.prisma.battles.update(
+                where={"id": battle.id},
+                data={"is_finished": True},
+            )
+            battle.is_finished = True
+            await self.event_dispatcher.battle_end(
+                battle=battle,
+                winner=winner,
+                contender_1_pv=pv1,
+                contender_2_pv=pv2,
+            )
+            return True
+        return False
+
+    async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
+        """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
+        Renvoie False si le max rounds est dépassé (le share doit être ignoré)."""
         existing_round = await self.prisma.rounds.find_unique(
             where={
                 "battle_id_block_height": {
@@ -166,7 +206,6 @@ class Referee:
             }
         )
 
-        # 3. Si le round n'existe pas, vérifier si on peut en créer un nouveau
         if existing_round is None:
             current_round_count = await self.get_current_round_number(battle.id)
             if current_round_count >= battle.rounds:
@@ -174,15 +213,17 @@ class Referee:
                     f"Ignoring share for battle {battle.id} at block {block_height}, "
                     f"battle has reached max rounds ({battle.rounds})"
                 )
-                return
+                return False
 
-            # Créer le round courant
             created = await self._try_create_round(battle.id, block_height)
             if created:
                 round_number = await self.get_current_round_number(battle.id)
                 await self.event_dispatcher.new_round(battle, round_number, payload)
 
-        # 4. Mettre à jour le best share
+        return True
+
+    async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
+        """Identifie le contender et met à jour le best diff si supérieur."""
         if payload.address == battle.contender_1_address:
             contender = "contender_1"
             query = """

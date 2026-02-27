@@ -16,9 +16,18 @@ class WebsocketWrapper():
         self.uri = uri
         self.on_message = on_message
         self.status: Status = Status.DISCONNECTED
+        self._running = True
+        self._ws: websockets.ClientConnection | None = None
     
+    async def stop(self):
+        self._running = False
+        if self._ws is not None:
+            await self._ws.close()
+
     async def _discontect_and_reconnect(self, reason: str):
         self.status = Status.DISCONNECTED
+        if not self._running:
+            return
         log.warn(f"{reason}. Reconnexion dans 5 secondes...")
         await asyncio.sleep(5)
         
@@ -43,31 +52,36 @@ class WebsocketWrapper():
             raise
 
     async def continuous_listener(self):
-        while True:
+        while self._running:
             reason = "Connxion fermée"
             try:
                 self.status = Status.CONNECTING
                 line = log.info("Connecting to", self.uri)
                 async with websockets.connect(self.uri) as ws:
+                    self._ws = ws
                     self.status = Status.CONNECTED
                     line.add_text("OK")
                     line.edit_print()
-                    
+
                     async for message in ws:
                         try:
                             await self.hanlde_message(message)
-                        
+
                         except Exception:
                             continue
-                        
+
             except websockets.WebSocketException as e:
                 reason = "Déconnecté"
-            
+
             except OSError:
                 reason = "Connexion refusée"
 
             except Exception as e:
                 reason = str(e)
-            
+
             finally:
+                self._ws = None
                 await self._discontect_and_reconnect(reason)
+
+        self.status = Status.DISCONNECTED
+        log.info("Listener stopped for", self.uri)

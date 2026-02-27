@@ -1,7 +1,7 @@
 from prisma import Prisma
 from src.apis.chauffagistes_pool.ws import WebsocketWrapper
 from init import API_URL, log, app, referee
-from asyncio import create_task, sleep, gather
+from asyncio import Task, create_task, sleep, gather
 from functools import partial
 
 prisma: Prisma = app["prisma"]
@@ -10,16 +10,28 @@ prisma: Prisma = app["prisma"]
 async def shares_listener():
     log.info("Starting match loop...")
 
-    # Stocker les 2 ws de chaque battle (1 par user)
-    ws: dict[int, tuple[WebsocketWrapper, WebsocketWrapper]] = {}
+    # Stocker les 2 ws et leurs tasks pour chaque battle
+    active: dict[int, tuple[WebsocketWrapper, WebsocketWrapper, Task, Task]] = {}
     assert API_URL is not None
 
     while True:
         try:
             battles = await prisma.battles.find_many(where={"is_finished": False})
+            active_ids = {b.id for b in battles}
 
+            # Couper les ws des batailles terminées
+            finished_ids = set(active.keys()) - active_ids
+            for battle_id in finished_ids:
+                ws1, ws2, t1, t2 = active.pop(battle_id)
+                log.info(f"Stopping ws for finished battle {battle_id}")
+                await ws1.stop()
+                await ws2.stop()
+                t1.cancel()
+                t2.cancel()
+
+            # Démarrer les ws des nouvelles batailles
             for battle in battles:
-                if battle.id not in ws:
+                if battle.id not in active:
                     log.info(
                         f"Added ws for battle {battle.id}",
                         battle.contender_1_address,
@@ -33,18 +45,11 @@ async def shares_listener():
                         f"{API_URL}/{battle.contender_2_address}",
                         partial(referee.on_share, battle),
                     )
-                    ws[battle.id] = ws1, ws2
-
-            tasks = []
-            for battle_id, (ws1, ws2) in ws.items():
-                tasks.append(create_task(ws1.continuous_listener()))
-                tasks.append(create_task(ws2.continuous_listener()))
-
-            # Chaque wrapper s'occupe de maintenir la connexion active
-            await gather(*tasks)
+                    t1 = create_task(ws1.continuous_listener())
+                    t2 = create_task(ws2.continuous_listener())
+                    active[battle.id] = ws1, ws2, t1, t2
 
         except Exception:
             log.error("Error in match loop")
 
-        finally:
-            await sleep(3)
+        await sleep(3)
