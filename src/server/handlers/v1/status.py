@@ -34,4 +34,4 @@ async def get_hits(request: Request):
     except Exception:
         return json_response({"error": "Battle not found"}, status=404)
     
-    return json_response(data)
+    return json_response(list(formatter.format_row(row) for row in data))

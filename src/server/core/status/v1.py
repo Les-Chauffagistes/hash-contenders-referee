@@ -26,7 +26,6 @@ class BattleResponse(TypedDict):
 async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleResponse:
     prisma: Prisma = app["prisma"]
 
-    log.info("include_hits", include_hits)
     battle = await prisma.battles.find_unique(
         where={"id": int(battle_id)},
         include={"all_rounds": True} if include_hits else None,
