@@ -112,7 +112,7 @@ jobs:
 
       - name: notify-deploy
         run: |
-          curl -X POST ${{ secrets.DEPLOY_URL }} \
+          curl -X POST ${{ secrets.GLOBAL_DEPLOY_URL }} \
             -H "X-Deploy-Token: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"repository": {"full_name": "Les-Chauffagistes/hash-contenders-referee"}}'
