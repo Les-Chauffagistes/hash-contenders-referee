@@ -50,7 +50,7 @@ jobs:
       - name: Run tests
         run: |
           source venv/bin/activate
-          pytest
+          python -m pytest
 
       - name: Cleanup PostgreSQL
         if: always()
