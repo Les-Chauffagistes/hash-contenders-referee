@@ -8,8 +8,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8095}/v1/health"]
@@ -17,15 +15,6 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
-
-  migrate:
-    image: hash-contenders-referee:${TAG:-latest}
-    command: prisma migrate deploy
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
 
   db:
     image: postgres:18.1-alpine3.23
