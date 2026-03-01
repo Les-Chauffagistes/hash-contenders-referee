@@ -10,26 +10,26 @@ env:
 jobs:
   test:
     runs-on: [self-hosted, macOS]
-    services:
-      postgres:
-        image: postgres:18.1-alpine3.23
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: chauffagistes_test
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/chauffagistes_test
       SERVER_PORT: 9095
       API_URL: ws://localhost:8765
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start PostgreSQL
+        run: |
+          docker rm -f pg-test 2>/dev/null || true
+          docker run -d \
+            --name pg-test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=chauffagistes_test \
+            -p 5433:5432 \
+            postgres:18.1-alpine3.23
+          until docker exec pg-test pg_isready -U postgres; do
+            sleep 1
+          done
 
       - uses: actions/setup-python@v5
         with:
@@ -47,6 +47,10 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+      - name: Cleanup PostgreSQL
+        if: always()
+        run: docker rm -f pg-test || true
 
   build:
     runs-on: [self-hosted, macOS]
