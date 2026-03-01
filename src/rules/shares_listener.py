@@ -38,11 +38,11 @@ async def shares_listener():
                         battle.contender_2_address,
                     )
                     ws1 = WebsocketWrapper(
-                        f"{API_URL}/{battle.contender_1_address}",
+                        f"{API_URL}/shares?{battle.contender_1_address}",
                         partial(referee.on_share, battle),
                     )
                     ws2 = WebsocketWrapper(
-                        f"{API_URL}/{battle.contender_2_address}",
+                        f"{API_URL}/shares?{battle.contender_2_address}",
                         partial(referee.on_share, battle),
                     )
                     t1 = create_task(ws1.continuous_listener())
