@@ -31,22 +31,26 @@ jobs:
             sleep 1
           done
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Setup venv and install dependencies
+        run: |
+          python3.13 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
 
       - name: Generate Prisma client
-        run: prisma generate
+        run: |
+          source venv/bin/activate
+          prisma generate
 
       - name: Apply migrations
-        run: prisma migrate deploy
+        run: |
+          source venv/bin/activate
+          prisma migrate deploy
 
       - name: Run tests
-        run: pytest
+        run: |
+          source venv/bin/activate
+          pytest
 
       - name: Cleanup PostgreSQL
         if: always()
