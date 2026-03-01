@@ -57,7 +57,7 @@ class WebsocketWrapper():
             try:
                 self.status = Status.CONNECTING
                 line = log.info("Connecting to", self.uri)
-                async with websockets.connect(self.uri, additional_headers={"Authirization": f"Bearer {API_TOKEN}"}) as ws:
+                async with websockets.connect(self.uri, additional_headers={"Authorization": f"Bearer {API_TOKEN}"}) as ws:
                     self._ws = ws
                     self.status = Status.CONNECTED
                     line.add_text("OK")
