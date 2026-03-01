@@ -1,0 +1,67 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE_NAME: hash-contenders-referee
+
+jobs:
+  test:
+    runs-on: [self-hosted, macOS]
+    services:
+      postgres:
+        image: postgres:18.1-alpine3.23
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chauffagistes_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/chauffagistes_test
+      SERVER_PORT: 9095
+      API_URL: ws://localhost:8765
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate Prisma client
+        run: prisma generate
+
+      - name: Apply migrations
+        run: prisma migrate deploy
+
+      - name: Run tests
+        run: pytest
+
+  build:
+    runs-on: [self-hosted, macOS]
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          docker build -t $IMAGE_NAME:sha-$SHORT_SHA -t $IMAGE_NAME:latest .
+
+      - name: Notify deploy
+        run: |
+          curl -X POST ${{ secrets.GLOBAL_DEPLOY_URL }} \
+            -H "X-Deploy-Token: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"repository": {"full_name": "Les-Chauffagistes/hash-contenders-referee"}}'

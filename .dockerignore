@@ -1,0 +1,15 @@
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+.git/
+.vscode/
+.claude/
+*.pyc
+.deploy-*
+.github/
+old-update.sh
+update.sh
+rollback.sh
+docker-compose.yml
