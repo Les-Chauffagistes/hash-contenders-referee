@@ -3,7 +3,7 @@ from enum import Enum
 import json
 import websockets
 from src.apis.chauffagistes_pool.models.Share import Share
-from init import log
+from init import API_TOKEN, log
 from typing import Any, Awaitable, Callable
 
 class Status(Enum):
@@ -57,7 +57,7 @@ class WebsocketWrapper():
             try:
                 self.status = Status.CONNECTING
                 line = log.info("Connecting to", self.uri)
-                async with websockets.connect(self.uri) as ws:
+                async with websockets.connect(self.uri, additional_headers={"Authirization": f"Bearer {API_TOKEN}"}) as ws:
                     self._ws = ws
                     self.status = Status.CONNECTED
                     line.add_text("OK")
