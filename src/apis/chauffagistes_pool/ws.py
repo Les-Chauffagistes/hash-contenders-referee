@@ -28,7 +28,7 @@ class WebsocketWrapper():
         self.status = Status.DISCONNECTED
         if not self._running:
             return
-        log.warn(f"{reason}. Reconnexion dans 5 secondes...")
+        log.error(f"{reason}. Reconnexion dans 5 secondes...")
         await asyncio.sleep(5)
         
     
