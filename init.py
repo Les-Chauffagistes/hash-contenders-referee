@@ -23,3 +23,8 @@ API_URL = getenv("API_URL")
 if not API_URL:
     log.crit("API_URL not set")
     exit(1)
+
+API_TOKEN = getenv("API_TOKEN")
+if not API_TOKEN:
+    log.crit("API_TOKEN not set")
+    exit(1)

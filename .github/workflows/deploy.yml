@@ -1,0 +1,75 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE_NAME: hash-contenders-referee
+
+jobs:
+  test:
+    runs-on: [self-hosted, macOS]
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/chauffagistes_test
+      SERVER_PORT: 9095
+      API_URL: ws://localhost:8765
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start PostgreSQL
+        run: |
+          docker rm -f pg-test 2>/dev/null || true
+          docker run -d \
+            --name pg-test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=chauffagistes_test \
+            -p 5433:5432 \
+            postgres:18.1-alpine3.23
+          until docker exec pg-test pg_isready -U postgres; do
+            sleep 1
+          done
+
+      - name: Setup venv and install dependencies
+        run: |
+          python3.13 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Generate Prisma client
+        run: |
+          source venv/bin/activate
+          prisma generate
+
+      - name: Apply migrations
+        run: |
+          source venv/bin/activate
+          prisma migrate deploy
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          python -m pytest
+
+      - name: Cleanup PostgreSQL
+        if: always()
+        run: docker rm -f pg-test || true
+
+  build:
+    runs-on: [self-hosted, macOS]
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          docker build -t $IMAGE_NAME:sha-$SHORT_SHA -t $IMAGE_NAME:latest .
+
+      - name: Notify deploy
+        run: |
+          curl -X POST ${{ secrets.GLOBAL_DEPLOY_URL }} \
+            -H "X-Deploy-Token: ${{ secrets.GLOBAL_DEPLOY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"repository": {"full_name": "Les-Chauffagistes/hash-contenders-referee"}}'

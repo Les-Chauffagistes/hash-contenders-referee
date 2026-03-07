@@ -8,3 +8,4 @@ python_dotenv
 websockets
 pytest-cov
 zon
+prisma

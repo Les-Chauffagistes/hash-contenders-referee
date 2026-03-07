@@ -173,3 +173,68 @@ async def test_battle_continues_while_pv_above_zero(
 
     # battle_end n'a pas été appelé
     referee.event_dispatcher.battle_end.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ko_cleans_up_spurious_round_from_race_condition(
+    prisma_tx: Prisma, referee: Referee
+):
+    """Quand un round est créé par une race condition pendant le KO,
+    _check_ko le supprime (round non finalisé).
+    Scénario : les 2 tasks WS reçoivent un share au même block h+1.
+    Task 2 crée le round h+1 pendant que Task 1 détecte le KO."""
+    battle = await create_battle(prisma_tx, contenders_pv=1)
+    referee.event_dispatcher = AsyncMock()
+
+    # Round 1 (block 400): contender 1 gagne
+    await referee.on_share(battle, make_share("bc1_address", 400, diff=200))
+    await referee.on_share(battle, make_share("bc2_address", 400, diff=100))
+
+    # Simuler la race condition : Task 2 a créé le round 401
+    # pendant que Task 1 est en train de finaliser round 400
+    await prisma_tx.rounds.create(
+        data={"battle_id": battle.id, "block_height": 401}
+    )
+
+    round_401 = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 401}}
+    )
+    assert round_401 is not None
+    assert round_401.finalized_at is None
+
+    # Task 1 : share au block 401, finalise round 400 -> KO détecté -> cleanup
+    await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
+
+    # Le KO a dû supprimer le round 401 (non finalisé, créé par la race)
+    round_401_after = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 401}}
+    )
+    assert round_401_after is None
+
+    # Seul le round 400 (finalisé) subsiste
+    total_rounds = await prisma_tx.rounds.count(where={"battle_id": battle.id})
+    assert total_rounds == 1
+
+
+@pytest.mark.asyncio
+async def test_ko_preserves_finalized_rounds(
+    prisma_tx: Prisma, referee: Referee
+):
+    """Le cleanup KO ne supprime que les rounds non finalisés,
+    les rounds finalisés sont préservés."""
+    battle = await create_battle(prisma_tx, contenders_pv=1)
+    referee.event_dispatcher = AsyncMock()
+
+    # Round 1 (block 400): contender 1 gagne
+    await referee.on_share(battle, make_share("bc1_address", 400, diff=200))
+    await referee.on_share(battle, make_share("bc2_address", 400, diff=100))
+
+    # Block 401 finalise round 400 -> KO
+    await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
+
+    # Le round 400 (finalisé) doit toujours exister
+    round_400 = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
+    )
+    assert round_400 is not None
+    assert round_400.finalized_at is not None

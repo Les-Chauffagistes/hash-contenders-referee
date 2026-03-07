@@ -154,6 +154,10 @@ class Referee:
         if closed_rounds and await self._check_ko(battle):
             return
 
+        # Re-vérifier après les awaits : l'autre task a pu clôturer la bataille
+        if battle.is_finished:
+            return
+
         if not await self._ensure_round_exists(battle, block_height, payload):
             return
 
@@ -185,6 +189,11 @@ class Referee:
                 data={"is_finished": True},
             )
             battle.is_finished = True
+            # Nettoyer les rounds créés par une race condition entre les 2 tasks WS
+            await self.prisma.execute_raw(
+                "DELETE FROM rounds WHERE battle_id = $1 AND finalized_at IS NULL",
+                battle.id,
+            )
             await self.event_dispatcher.battle_end(
                 battle=battle,
                 winner=winner,

@@ -3,8 +3,8 @@ from enum import Enum
 import json
 import websockets
 from src.apis.chauffagistes_pool.models.Share import Share
-from init import log
-from typing import Any, Awaitable, Callable
+from init import API_TOKEN, log
+from typing import Any, Awaitable, Callable, Optional
 
 class Status(Enum):
     CONNECTED = "connected"
@@ -24,7 +24,7 @@ class WebsocketWrapper():
         if self._ws is not None:
             await self._ws.close()
 
-    async def _discontect_and_reconnect(self, reason: str, e: Exception):
+    async def _discontect_and_reconnect(self, reason: str, e: Optional[Exception]):
         self.status = Status.DISCONNECTED
         if not self._running:
             return
@@ -58,7 +58,7 @@ class WebsocketWrapper():
             try:
                 self.status = Status.CONNECTING
                 line = log.info("Connecting to", self.uri)
-                async with websockets.connect(self.uri) as ws:
+                async with websockets.connect(self.uri, additional_headers={"Authorization": f"Bearer {API_TOKEN}"}) as ws:
                     self._ws = ws
                     self.status = Status.CONNECTED
                     line.add_text("OK")
