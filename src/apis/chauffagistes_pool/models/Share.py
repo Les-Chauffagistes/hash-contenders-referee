@@ -6,30 +6,28 @@ from typing import Any
 class Share:
     workinfoid: int
     clientid: int
-    enonce1: str
-    enonce2: str
-    nonce: str
-    ntime: str
-    diff: float
-    sdiff: Optional[float]
+    diff: int
+    sdiff: float
     hash: str
     result: bool
     errn: int
-    createdate: float
-    createby: str
-    createcode: str
-    createinet: str
+    createdate: str
+    ts: float
     workername: str
     username: str
     address: str
+    worker: str
+    workernameAddr: str
+    ip: str
     agent: str
-    reject_reason: Optional[str]
     round: str
+    file: str
+    rejectReason: Optional[str] = None
 
     @classmethod
     def from_any(cls, data: Any) -> "Share":
         if isinstance(data, dict):
-            return cls(**data)
+            return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
         elif isinstance(data, Share):
             return data
         else:

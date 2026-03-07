@@ -74,6 +74,7 @@ class Referee:
             battle_id,
             block_height,
         )
+        self.log.info("Created round?", result)
         return result == 1
 
     async def _get_rounds_to_close(self, battle: battles, block_height: int):
@@ -132,6 +133,7 @@ class Referee:
         return rows  # seulement les rounds fermés
 
     async def on_share(self, battle: battles, payload: Share):
+
         block_height = int(payload.round, 16)
 
         # Ignorer les shares si la bataille est terminée
