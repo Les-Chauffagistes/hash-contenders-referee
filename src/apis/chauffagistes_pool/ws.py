@@ -34,6 +34,7 @@ class WebsocketWrapper():
     
     async def hanlde_message(self, message: websockets.Data):
         try:
+            #log.debug(message)
             data = json.loads(message)
             parsed_data = Share.from_any(data)
         

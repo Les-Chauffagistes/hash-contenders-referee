@@ -13,6 +13,16 @@ cors = aiohttp_cors.setup(
             allow_credentials=True,
             expose_headers="*",
             allow_headers="*"
-        )
+        ),
+        "https://hash-contenders.chauffagistes-btc.fr": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*"
+        ),
+        "http://localhost:3003": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*"
+        ),
     }
 )
