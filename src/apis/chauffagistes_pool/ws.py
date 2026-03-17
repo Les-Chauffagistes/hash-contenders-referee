@@ -36,16 +36,20 @@ class WebsocketWrapper:
     async def hanlde_message(self, message: websockets.Data):
         try:
             data: dict = json.loads(message)
-            log.debug(data.get("type"))
+
+            #log.debug(data.get("type"))
+
             if data.get("type") == "hello":
                 return
-            
-            elif data.get("type") == "share":
-                parsed_data = Share.from_any(data["share"])
-            
-            else:
+
+            if data.get("type") != "share":
                 log.warn("Unknown message type", data)
                 return
+
+            parsed_share = Share.from_any(data["share"])
+            replay = bool(data.get("replay", False))
+
+            await self.on_message(parsed_share, replay)
 
         except json.JSONDecodeError as e:
             log.warn("Invalid JSON", e)
@@ -53,20 +57,18 @@ class WebsocketWrapper:
         except ValueError as e:
             log.warn("Invalid data", e)
             raise
-
-        try:
-            await self.on_message(parsed_data)
-
         except Exception as e:
             log.error(f"Error while processing message: {e}")
             raise
 
     async def continuous_listener(self):
         while self._running:
-            reason = "Connxion fermée"
+            reason = "Connexion fermée"
+            error = None
             try:
                 self.status = Status.CONNECTING
                 line = log.info("Connecting to", self.uri)
+
                 async with websockets.connect(
                     self.uri,
                     additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
@@ -79,19 +81,15 @@ class WebsocketWrapper:
                     async for message in ws:
                         try:
                             await self.hanlde_message(message)
-
                         except Exception as e:
-                            log.error()
+                            log.error(f"Message handling failed: {e}")
 
             except websockets.WebSocketException as e:
                 reason, error = "Déconnecté", e
-
             except OSError as e:
                 reason, error = "Connexion refusée", e
-
             except Exception as e:
                 reason, error = str(e), e
-
             finally:
                 self._ws = None
                 await self._discontect_and_reconnect(reason, error)

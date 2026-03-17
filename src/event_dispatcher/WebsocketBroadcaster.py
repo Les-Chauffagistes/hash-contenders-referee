@@ -13,7 +13,7 @@ class WebsocketBroadcaster:
             {
                 "type": "BEST_SHARE_UPDATE",
                 "user": contender,
-                "diff": payload.diff,
+                "diff": payload.sdiff,
             },
         )
 
