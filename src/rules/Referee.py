@@ -11,65 +11,89 @@ class Referee:
     log: Logger
     event_dispatcher: WebsocketBroadcaster
 
+    def _get_duel_contenders(self, battle: battles):
+        contenders = getattr(battle, "contenders", None) or []
+
+        contender_1 = next((c for c in contenders if c.slot == 1), None)
+        contender_2 = next((c for c in contenders if c.slot == 2), None)
+
+        return contender_1, contender_2
+
     async def get_current_round(self, battle_id: int):
-        """Renvoie la hauteur de block du round en cours"""
+        """Renvoie le round courant le plus récent."""
         result = await self.prisma.rounds.find_many(
-            where={"battle_id": battle_id}, order={"block_height": "desc"}, take=1
+            where={"battle_id": battle_id},
+            order={"block_height": "desc"},
+            take=1,
         )
         if len(result) == 0:
             return None
 
-        else:
-            return result[0]
-    
+        return result[0]
+
     async def get_current_round_number(self, battle_id: int) -> int:
         res = await self.prisma.query_raw(
             """
-            SELECT COUNT(*) AS round_number
+            SELECT COALESCE(MAX(round_number), 0) AS round_number
             FROM rounds
             WHERE battle_id = $1;
             """,
             battle_id,
         )
-        return res[0]["round_number"]
+        return int(res[0]["round_number"])
 
     async def compute_pv(self, battle: battles) -> tuple[int, int]:
-        """Calcule les PV réstants à partir de l'historique des hits. Renvoie 2 entiers (pv_joueur1, pv_joueur2)"""
-
-        hits_by_contender1 = await self.prisma.query_raw(
+        """Calcule les PV restants à partir de l'historique des rounds finalisés."""
+        hits_by_contender_1 = await self.prisma.query_raw(
             """
             SELECT *
-            FROM "rounds"
+            FROM rounds
             WHERE battle_id = $1
-            AND contender_1_best_diff > contender_2_best_diff
+              AND finalized_at IS NOT NULL
+              AND contender_1_best_diff > contender_2_best_diff
             """,
             battle.id,
         )
 
-        hits_by_contenders2 = await self.prisma.query_raw(
+        hits_by_contender_2 = await self.prisma.query_raw(
             """
             SELECT *
-            FROM "rounds"
+            FROM rounds
             WHERE battle_id = $1
-            AND contender_1_best_diff < contender_2_best_diff
+              AND finalized_at IS NOT NULL
+              AND contender_1_best_diff < contender_2_best_diff
             """,
             battle.id,
         )
 
-        return battle.contenders_pv - len(
-            hits_by_contenders2
-        ), battle.contenders_pv - len(hits_by_contender1)
-    
+        return (
+            battle.max_pv - len(hits_by_contender_2),
+            battle.max_pv - len(hits_by_contender_1),
+        )
+
     async def _try_create_round(self, battle_id: int, block_height: int) -> bool:
-        """Essaie de créer un round à chaque share"""
-
-        # Egal 1 si le round a bien été créé
+        """Essaie de créer un round si inexistant."""
         result = await self.prisma.execute_raw(
             """
-            INSERT INTO rounds (battle_id, block_height)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
-            RETURNING battle_id
+            INSERT INTO rounds (
+                battle_id,
+                block_height,
+                round_number,
+                status,
+                contender_1_best_diff,
+                contender_2_best_diff
+            )
+            SELECT
+                $1,
+                $2,
+                COALESCE(MAX(r.round_number), 0) + 1,
+                'PENDING',
+                0,
+                0
+            FROM rounds r
+            WHERE r.battle_id = $1
+            ON CONFLICT (battle_id, block_height) DO NOTHING
+            RETURNING battle_id;
             """,
             battle_id,
             block_height,
@@ -84,9 +108,9 @@ class Referee:
                 SELECT
                     battle_id,
                     block_height,
+                    round_number,
                     contender_1_best_diff,
-                    contender_2_best_diff,
-                    ROW_NUMBER() OVER (ORDER BY block_height) AS round_number
+                    contender_2_best_diff
                 FROM rounds
                 WHERE battle_id = $1
             )
@@ -101,17 +125,15 @@ class Referee:
             FROM rounds r
             JOIN ordered o USING (battle_id, block_height)
             WHERE r.battle_id = $1
-            AND r.block_height < $2
-            AND r.finalized_at IS NULL
+              AND r.block_height < $2
+              AND r.finalized_at IS NULL
             ORDER BY r.block_height;
             """,
             battle.id,
             block_height,
         )
-    
+
     async def finalize_rounds(self, battle_id: int, next_block_height: int):
-        # Update uniquement les rounds non finalisés avant le bloc actuel
-        # RETURNING permet de récupérer uniquement les rounds réellement fermés
         rows = await self.prisma.query_raw(
             """
             UPDATE rounds
@@ -123,55 +145,39 @@ class Referee:
                     ELSE NULL
                 END
             WHERE battle_id = $1
-            AND block_height < $2
-            AND finalized_at IS NULL
+              AND block_height < $2
+              AND finalized_at IS NULL
             RETURNING block_height, winner, contender_1_best_diff, contender_2_best_diff;
             """,
             battle_id,
             next_block_height,
         )
-        return rows  # seulement les rounds fermés
+        return rows
 
     async def on_share(self, battle: battles, payload: Share, replay: bool):
-        # self.log.debug(
-        #     f"[BATTLE {battle.id}] Share reçu | worker={payload.worker} diff={payload.diff} "
-        #     f"round={payload.round} replay={replay}"
-        # )
-
         if replay:
-            #self.log.debug(f"[BATTLE {battle.id}] Share ignoré (replay)")
             return
 
         block_height = int(payload.round, 16)
 
-        self.log.debug(
-            f"[BATTLE {battle.id}] Block height décodé = {block_height}"
-        )
+        self.log.debug(f"[BATTLE {battle.id}] Block height décodé = {block_height}")
 
-        # Ignorer les shares si la bataille est terminée
         if battle.is_finished:
-            self.log.debug(
-                f"[BATTLE {battle.id}] Share ignoré : battle déjà terminée"
-            )
+            self.log.debug(f"[BATTLE {battle.id}] Share ignoré : battle déjà terminée")
             return
 
-        # Ignorer les shares avant le début de la bataille
-        if block_height < battle.start_height:
+        if battle.start_height is not None and block_height < battle.start_height:
             self.log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : block {block_height} "
                 f"< start_height {battle.start_height}"
             )
             return
 
-        self.log.debug(
-            f"[BATTLE {battle.id}] Traitement du share pour block {block_height}"
-        )
+        self.log.debug(f"[BATTLE {battle.id}] Traitement du share pour block {block_height}")
 
         closed_rounds = await self._finalize_and_broadcast(battle, block_height)
 
-        self.log.debug(
-            f"[BATTLE {battle.id}] Rounds fermés = {len(closed_rounds)}"
-        )
+        self.log.debug(f"[BATTLE {battle.id}] Rounds fermés = {len(closed_rounds)}")
 
         if closed_rounds:
             for r in closed_rounds:
@@ -183,16 +189,11 @@ class Referee:
                 )
 
         if closed_rounds and await self._check_ko(battle):
-            self.log.debug(
-                f"[BATTLE {battle.id}] KO détecté après fermeture de round"
-            )
+            self.log.debug(f"[BATTLE {battle.id}] KO détecté après fermeture de round")
             return
 
-        # Re-vérifier après les awaits : l'autre task a pu clôturer la bataille
         if battle.is_finished:
-            self.log.debug(
-                f"[BATTLE {battle.id}] Battle terminée pendant le traitement"
-            )
+            self.log.debug(f"[BATTLE {battle.id}] Battle terminée pendant le traitement")
             return
 
         self.log.debug(
@@ -205,18 +206,13 @@ class Referee:
             )
             return
 
-        self.log.debug(
-            f"[BATTLE {battle.id}] Round OK, tentative mise à jour best share"
-        )
+        self.log.debug(f"[BATTLE {battle.id}] Round OK, tentative mise à jour best share")
 
         await self._update_best_share(battle, block_height, payload)
 
-        self.log.debug(
-            f"[BATTLE {battle.id}] Fin traitement share diff={payload.sdiff}"
-        )
+        self.log.debug(f"[BATTLE {battle.id}] Fin traitement share diff={payload.sdiff}")
 
     async def _finalize_and_broadcast(self, battle: battles, block_height: int) -> list:
-        """Finalise les rounds précédents et broadcast hit_result pour chacun."""
         closed_rounds = await self.finalize_rounds(battle.id, block_height)
         for r in closed_rounds:
             pv1, pv2 = await self.compute_pv(battle)
@@ -232,7 +228,6 @@ class Referee:
         return closed_rounds
 
     async def _check_ko(self, battle: battles) -> bool:
-        """Vérifie si un contender est KO (PV ≤ 0). Renvoie True si la bataille est terminée."""
         pv1, pv2 = await self.compute_pv(battle)
         if pv1 <= 0 or pv2 <= 0:
             winner = 1 if pv2 <= 0 else 2
@@ -241,11 +236,12 @@ class Referee:
                 data={"is_finished": True},
             )
             battle.is_finished = True
-            # Nettoyer les rounds créés par une race condition entre les 2 tasks WS
+
             await self.prisma.execute_raw(
                 "DELETE FROM rounds WHERE battle_id = $1 AND finalized_at IS NULL",
                 battle.id,
             )
+
             await self.event_dispatcher.battle_end(
                 battle=battle,
                 winner=winner,
@@ -256,8 +252,6 @@ class Referee:
         return False
 
     async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
-        """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
-        Renvoie False si le max rounds est dépassé (le share doit être ignoré)."""
         existing_round = await self.prisma.rounds.find_unique(
             where={
                 "battle_id_block_height": {
@@ -284,31 +278,41 @@ class Referee:
         return True
 
     async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
-        """Identifie le contender et met à jour le best diff si supérieur."""
-        if payload.address == battle.contender_1_address:
+        contender_1, contender_2 = self._get_duel_contenders(battle)
+
+        if contender_1 is None or contender_2 is None:
+            self.log.warn(f"Battle {battle.id} has missing contenders")
+            return
+
+        if payload.address == contender_1.address:
             contender = "contender_1"
             query = """
                 UPDATE rounds
                 SET contender_1_best_diff = $2
                 WHERE battle_id = $1
-                AND block_height = $3
-                AND contender_1_best_diff < $2
+                  AND block_height = $3
+                  AND contender_1_best_diff < $2
                 RETURNING contender_1_best_diff;
             """
-        elif payload.address == battle.contender_2_address:
+        elif payload.address == contender_2.address:
             contender = "contender_2"
             query = """
                 UPDATE rounds
                 SET contender_2_best_diff = $2
                 WHERE battle_id = $1
-                AND block_height = $3
-                AND contender_2_best_diff < $2
+                  AND block_height = $3
+                  AND contender_2_best_diff < $2
                 RETURNING contender_2_best_diff;
             """
         else:
             self.log.warn("Received share from unknown address")
             return
 
-        rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)
+        rows = await self.prisma.execute_raw(
+            query,
+            battle.id,
+            int(payload.sdiff),
+            block_height,
+        )
         if rows:
             await self.event_dispatcher.new_best_share(battle, contender, payload)

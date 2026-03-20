@@ -9,28 +9,126 @@ datasource db {
 }
 
 model battles {
-  id                     BigInt   @id @default(autoincrement())
-  start_height           Int
-  rounds                 Int
-  contenders_pv          Int
-  contender_1_address    String
-  contender_2_address    String
-  contender_1_name       String
-  contender_2_name       String
-  is_finished            Boolean  @default(false)
-  are_addresses_privates Boolean  @default(false)
+  id                     BigInt        @id @default(autoincrement())
+  name                   String
+  description            String?
+  status                 BattleStatus  @default(DRAFT)
+  mode                   BattleMode    @default(DUEL)
+
+  start_height           Int?
+  planned_start_at       DateTime?     @db.Timestamp(6)
+  started_at             DateTime?     @db.Timestamp(6)
+  finished_at            DateTime?     @db.Timestamp(6)
+
+  rounds                 Int           @default(0)
+  current_round_number   Int           @default(0)
+  max_pv                 Int           @default(100)
+  is_finished            Boolean       @default(false)
+  are_addresses_privates Boolean       @default(false)
+
+  contenders             contenders[]
   all_rounds             rounds[]
+  events                 battle_events[]
+
+  created_at             DateTime      @default(now()) @db.Timestamp(6)
+  updated_at             DateTime      @updatedAt @db.Timestamp(6)
+
+  @@index([status])
+  @@index([planned_start_at])
+}
+
+model contenders {
+  id                BigInt    @id @default(autoincrement())
+  battle_id         BigInt
+  slot              Int
+  name              String
+  address           String
+  current_pv        Int
+  starting_pv       Int
+  is_ko             Boolean   @default(false)
+  is_winner         Boolean   @default(false)
+  team_name         String?
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  updated_at        DateTime  @updatedAt @db.Timestamp(6)
+
+  battle            battles   @relation(fields: [battle_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([battle_id])
+  @@unique([battle_id, slot])
+  @@unique([battle_id, address])
 }
 
 model rounds {
   battle_id             BigInt
   block_height          Int
-  contender_1_best_diff Int       @default(0)
-  contender_2_best_diff Int       @default(0)
-  winner                Int?      @db.SmallInt
+  round_number          Int
+  status                RoundStatus @default(PENDING)
+
+  contender_1_best_diff Int         @default(0)
+  contender_2_best_diff Int         @default(0)
+
+  winner                Int?        @db.SmallInt
   damage                Int?
-  finalized_at          DateTime? @db.Timestamp(6)
-  all_battles           battles   @relation(fields: [battle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  started_at            DateTime?   @db.Timestamp(6)
+  finalized_at          DateTime?   @db.Timestamp(6)
+
+  all_battles           battles     @relation(fields: [battle_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  events                battle_events[]
 
   @@id([battle_id, block_height])
+  @@unique([battle_id, round_number])
+  @@index([battle_id, status])
+}
+
+model battle_events {
+  id            BigInt      @id @default(autoincrement())
+  battle_id     BigInt
+  round_battle_id BigInt?
+  round_block_height Int?
+
+  type          BattleEventType
+  payload       Json?
+  created_at    DateTime    @default(now()) @db.Timestamp(6)
+
+  battle        battles     @relation(fields: [battle_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  round         rounds?     @relation(fields: [round_battle_id, round_block_height], references: [battle_id, block_height], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([battle_id, created_at])
+  @@index([type])
+}
+
+enum BattleStatus {
+  DRAFT
+  SCHEDULED
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+enum BattleMode {
+  DUEL
+  FFA
+  TEAM_VS_TEAM
+}
+
+enum RoundStatus {
+  PENDING
+  LIVE
+  FINISHED
+}
+
+enum BattleEventType {
+  BATTLE_CREATED
+  BATTLE_UPDATED
+  BATTLE_SCHEDULED
+  BATTLE_STARTED
+  BATTLE_STOPPED
+  BATTLE_FINISHED
+  BATTLE_CANCELLED
+  ROUND_CREATED
+  ROUND_STARTED
+  ROUND_FINALIZED
+  DAMAGE_APPLIED
+  CONTENDER_KO
 }
