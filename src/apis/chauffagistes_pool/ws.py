@@ -2,7 +2,7 @@ import asyncio
 from enum import Enum
 import json
 import websockets
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 from init import API_TOKEN, log
 from typing import Any, Awaitable, Callable, Optional
 
@@ -41,7 +41,7 @@ class WebsocketWrapper:
                 return
             
             elif data.get("type") == "share":
-                parsed_data = Share.from_any(data["share"])
+                parsed_data = Share(**data["share"])
             
             else:
                 log.warn("Unknown message type", data)

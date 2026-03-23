@@ -1,7 +1,7 @@
 from datetime import datetime
 from state import ClientWebsockets
 from prisma.models import battles
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 
 
 class WebsocketBroadcaster:

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 from src.rules.Referee import Referee
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 from prisma import Prisma
 
 

@@ -1,7 +1,7 @@
 from prisma import Prisma
 from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 from src.modules.logger.logger import Logger
 
 
