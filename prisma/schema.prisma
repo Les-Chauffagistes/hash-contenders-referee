@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-py"
+  provider                    = "prisma-client-py"
+  enable_experimental_decimal = true
+  recursive_type_depth        = 5
 }
 
 datasource db {
@@ -13,16 +15,19 @@ enum UserRole {
 }
 
 model users {
-  id            BigInt             @id @default(autoincrement())
-  pseudo        String?
-  email         String?            @unique
-  role          UserRole           @default(USER)
-  is_active     Boolean            @default(true)
-  created_at    DateTime           @default(now()) @db.Timestamp(6)
-  updated_at    DateTime           @updatedAt @db.Timestamp(6)
+  id         BigInt   @id @default(autoincrement())
+  pseudo     String?
+  email      String?  @unique
+  role       UserRole @default(USER)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
 
   password_auth password_accounts?
   sessions      user_sessions[]
+
+  created_battles battles[]        @relation("BattleOwner")
+  joined_entries  battle_entries[] @relation("EntryUser")
 }
 
 model password_accounts {
@@ -33,127 +38,204 @@ model password_accounts {
   created_at    DateTime @default(now()) @db.Timestamp(6)
   updated_at    DateTime @updatedAt @db.Timestamp(6)
 
-  user          users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model user_sessions {
-  id            BigInt   @id @default(autoincrement())
-  user_id       BigInt
-  token_hash    String   @unique
-  expires_at    DateTime @db.Timestamp(6)
-  created_at    DateTime @default(now()) @db.Timestamp(6)
-  last_seen_at  DateTime @default(now()) @db.Timestamp(6)
-  ip_address    String?
-  user_agent    String?
+  id           BigInt   @id @default(autoincrement())
+  user_id      BigInt
+  token_hash   String   @unique
+  expires_at   DateTime @db.Timestamp(6)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  last_seen_at DateTime @default(now()) @db.Timestamp(6)
+  ip_address   String?
+  user_agent   String?
 
-  user          users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([expires_at])
 }
 
 model battles {
-  id                     BigInt        @id @default(autoincrement())
-  name                   String
-  description            String?
-  status                 BattleStatus  @default(DRAFT)
-  mode                   BattleMode    @default(DUEL)
+  id            BigInt  @id @default(autoincrement())
+  owner_user_id BigInt
+  title         String?
+  description   String?
 
-  start_height           Int?
-  planned_start_at       DateTime?     @db.Timestamp(6)
-  started_at             DateTime?     @db.Timestamp(6)
-  finished_at            DateTime?     @db.Timestamp(6)
+  status        BattleStatus       @default(OPEN)
+  matching_mode BattleMatchingMode @default(NO_RULES)
 
-  rounds                 Int           @default(0)
-  current_round_number   Int           @default(0)
-  max_pv                 Int           @default(100)
-  is_finished            Boolean       @default(false)
-  are_addresses_privates Boolean       @default(false)
+  initial_pv           Int
+  current_round_number Int @default(0)
 
-  contenders             contenders[]
-  all_rounds             rounds[]
-  events                 battle_events[]
+  requested_hashrate_ths     Decimal? @db.Decimal(10, 2)
+  hashrate_tolerance_percent Decimal? @db.Decimal(5, 2)
 
-  created_at             DateTime      @default(now()) @db.Timestamp(6)
-  updated_at             DateTime      @updatedAt @db.Timestamp(6)
+  start_height Int?
+  started_at   DateTime? @db.Timestamp(6)
+  finished_at  DateTime? @db.Timestamp(6)
 
+  join_deadline_at    DateTime? @db.Timestamp(6)
+  connect_deadline_at DateTime? @db.Timestamp(6)
+
+  winner_entry_id     BigInt?
+  finish_reason       BattleFinishReason?
+  cancellation_reason String?
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  owner   users            @relation("BattleOwner", fields: [owner_user_id], references: [id], onDelete: Cascade)
+  entries battle_entries[]
+  rounds  rounds[]
+  events  battle_events[]
+  winner  battle_entries?  @relation("BattleWinner", fields: [winner_entry_id], references: [id], onDelete: SetNull)
+
+  @@index([owner_user_id])
   @@index([status])
-  @@index([planned_start_at])
+  @@index([matching_mode])
+  @@index([created_at])
 }
 
-model contenders {
-  id                BigInt    @id @default(autoincrement())
-  battle_id         BigInt
-  slot              Int
-  name              String
-  address           String
-  current_pv        Int
-  starting_pv       Int
-  is_ko             Boolean   @default(false)
-  is_winner         Boolean   @default(false)
-  team_name         String?
-  created_at        DateTime  @default(now()) @db.Timestamp(6)
-  updated_at        DateTime  @updatedAt @db.Timestamp(6)
+model battle_entries {
+  id        BigInt  @id @default(autoincrement())
+  battle_id BigInt
+  user_id   BigInt?
 
-  battle            battles   @relation(fields: [battle_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  slot   Int
+  status BattleEntryStatus @default(JOINED)
 
-  @@index([battle_id])
+  display_name String?
+  address      String
+  worker_name  String?
+
+  address_public Boolean @default(true)
+  worker_public  Boolean @default(true)
+
+  announced_hashrate_ths Decimal? @db.Decimal(10, 2)
+
+  current_pv  Int
+  rounds_won  Int @default(0)
+  rounds_lost Int @default(0)
+
+  first_share_at DateTime? @db.Timestamp(6)
+  last_share_at  DateTime? @db.Timestamp(6)
+
+  is_winner Boolean @default(false)
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  battle battles @relation(fields: [battle_id], references: [id], onDelete: Cascade)
+  user   users?  @relation("EntryUser", fields: [user_id], references: [id], onDelete: SetNull)
+
+  won_battles   battles[]       @relation("BattleWinner")
+  round_results round_results[]
+
+  won_rounds    rounds[]        @relation("RoundWinner")
+  lost_rounds   rounds[]        @relation("RoundLoser")
+  battle_events battle_events[]
+
   @@unique([battle_id, slot])
   @@unique([battle_id, address])
+  @@index([battle_id])
+  @@index([user_id])
 }
 
 model rounds {
-  battle_id             BigInt
-  block_height          Int
-  round_number          Int
-  status                RoundStatus @default(PENDING)
+  id        BigInt @id @default(autoincrement())
+  battle_id BigInt
 
-  contender_1_best_diff Int         @default(0)
-  contender_2_best_diff Int         @default(0)
+  round_number Int
+  block_height Int
+  status       RoundStatus @default(PENDING)
 
-  winner                Int?        @db.SmallInt
-  damage                Int?
+  winner_entry_id BigInt?
+  loser_entry_id  BigInt?
 
-  started_at            DateTime?   @db.Timestamp(6)
-  finalized_at          DateTime?   @db.Timestamp(6)
+  winner_best_share_diff Decimal? @db.Decimal(20, 8)
 
-  all_battles           battles     @relation(fields: [battle_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  events                battle_events[]
+  pv_lost Int @default(1)
 
-  @@id([battle_id, block_height])
+  started_at   DateTime? @db.Timestamp(6)
+  finalized_at DateTime? @db.Timestamp(6)
+
+  battle  battles         @relation(fields: [battle_id], references: [id], onDelete: Cascade)
+  winner  battle_entries? @relation("RoundWinner", fields: [winner_entry_id], references: [id], onDelete: SetNull)
+  loser   battle_entries? @relation("RoundLoser", fields: [loser_entry_id], references: [id], onDelete: SetNull)
+  results round_results[]
+  events  battle_events[]
+
   @@unique([battle_id, round_number])
+  @@unique([battle_id, block_height])
   @@index([battle_id, status])
 }
 
+model round_results {
+  id       BigInt @id @default(autoincrement())
+  round_id BigInt
+  entry_id BigInt
+
+  best_share_diff       Decimal? @db.Decimal(20, 8)
+  best_share_hash       String?
+  submitted_share_count Int      @default(0)
+
+  effective_hashrate_ths Decimal? @db.Decimal(10, 2)
+  hashrate_rule_violated Boolean  @default(false)
+  violation_reason       String?
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  round rounds         @relation(fields: [round_id], references: [id], onDelete: Cascade)
+  entry battle_entries @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@unique([round_id, entry_id])
+  @@index([entry_id])
+}
+
 model battle_events {
-  id            BigInt      @id @default(autoincrement())
-  battle_id     BigInt
-  round_battle_id BigInt?
-  round_block_height Int?
+  id        BigInt  @id @default(autoincrement())
+  battle_id BigInt
+  round_id  BigInt?
+  entry_id  BigInt?
 
-  type          BattleEventType
-  payload       Json?
-  created_at    DateTime    @default(now()) @db.Timestamp(6)
+  type       BattleEventType
+  payload    Json?
+  created_at DateTime        @default(now()) @db.Timestamp(6)
 
-  battle        battles     @relation(fields: [battle_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  round         rounds?     @relation(fields: [round_battle_id, round_block_height], references: [battle_id, block_height], onDelete: Cascade, onUpdate: NoAction)
+  battle battles         @relation(fields: [battle_id], references: [id], onDelete: Cascade)
+  round  rounds?         @relation(fields: [round_id], references: [id], onDelete: Cascade)
+  entry  battle_entries? @relation(fields: [entry_id], references: [id], onDelete: SetNull)
 
   @@index([battle_id, created_at])
+  @@index([round_id])
+  @@index([entry_id])
   @@index([type])
 }
 
 enum BattleStatus {
-  DRAFT
-  SCHEDULED
+  OPEN
+  MATCHED
+  WAITING_FOR_START
   LIVE
   FINISHED
   CANCELLED
 }
 
-enum BattleMode {
-  DUEL
-  FFA
-  TEAM_VS_TEAM
+enum BattleMatchingMode {
+  NO_RULES
+  EQUAL_HASHRATE
+}
+
+enum BattleEntryStatus {
+  JOINED
+  ACTIVE
+  NO_SHOW
+  DISQUALIFIED
+  WITHDREW
+  ELIMINATED
 }
 
 enum RoundStatus {
@@ -162,17 +244,30 @@ enum RoundStatus {
   FINISHED
 }
 
+enum BattleFinishReason {
+  PV_DEPLETED
+  DISQUALIFICATION
+  NO_SHOW
+  CANCELLED_MANUALLY
+}
+
 enum BattleEventType {
   BATTLE_CREATED
   BATTLE_UPDATED
-  BATTLE_SCHEDULED
+  BATTLE_JOINED
+  BATTLE_MATCHED
+  BATTLE_START_WINDOW_OPENED
   BATTLE_STARTED
-  BATTLE_STOPPED
   BATTLE_FINISHED
   BATTLE_CANCELLED
-  ROUND_CREATED
+
+  ENTRY_CONNECTED
+  ENTRY_NO_SHOW
+  ENTRY_DISQUALIFIED
+  ENTRY_ELIMINATED
+
   ROUND_STARTED
+  ROUND_SHARE_UPDATED
   ROUND_FINALIZED
-  DAMAGE_APPLIED
-  CONTENDER_KO
+  PV_LOST
 }

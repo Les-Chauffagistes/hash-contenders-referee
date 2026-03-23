@@ -1,7 +1,17 @@
-from aiohttp.web import Application, RouteTableDef
-from init import log
+from aiohttp import web
 
-log.debug("defining subapp and route table")
+from .create import create
+from .join import join
+from .list import list_battles
+from .status import status
 
-subapp = Application()
-routes = RouteTableDef()
+subapp = web.Application()
+
+routes = [
+    web.post("/battle/create", create),
+    web.post("/battle/join", join),
+    web.get("/battle/list", list_battles),
+    web.get("/battle/{id}", status),
+]
+
+subapp.add_routes(routes)

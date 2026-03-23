@@ -1,5 +1,6 @@
 asyncpg
 aiohttp
+bcrypt
 pytest
 pytest-asyncio
 cachetools
@@ -9,3 +10,4 @@ websockets
 pytest-cov
 zon
 prisma
+

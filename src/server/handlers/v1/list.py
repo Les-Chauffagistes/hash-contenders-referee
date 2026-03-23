@@ -1,10 +1,26 @@
-from aiohttp.web import Request
-from aiohttp.web_response import json_response
+from aiohttp.web import json_response
 
-from src.server.utils import formatter
-from src.server.core.list.v1 import get_battles
-from .base import routes
 
-@routes.get("/battles")
-async def list_battles(request: Request):
-    return json_response(list(formatter.format_rows(await get_battles())))
+async def list_battles(request):
+    prisma = request.config_dict["prisma"]
+
+    battles = await prisma.battles.find_many(
+        include={"entries": True},
+        order={"created_at": "desc"},
+    )
+
+    result = []
+
+    for b in battles:
+        e1 = next((e for e in b.entries if e.slot == 1), None)
+        e2 = next((e for e in b.entries if e.slot == 2), None)
+
+        result.append({
+            "id": int(b.id),
+            "status": b.status,
+            "pv": b.initial_pv,
+            "player1": e1.address if e1 else None,
+            "player2": e2.address if e2 else None,
+        })
+
+    return json_response(result)

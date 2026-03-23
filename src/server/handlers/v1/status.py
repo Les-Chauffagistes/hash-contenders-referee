@@ -1,37 +1,46 @@
-from src.server.utils import formatter
-from src.server.core.status.v1 import get_battle_hits, get_battle_status
-from .base import routes
-from aiohttp.web_request import Request
 from aiohttp.web import json_response
-from init import log
 
-log.debug("loading handlers")
 
-@routes.get("/status/{battle_id}")
-async def get_status(request: Request):
-    battle_id = request.match_info["battle_id"]
-    include_hits = "hits" in request.query.get("includes", "")
-    if not battle_id:
-        return json_response({"error": "Missing battle id"}, status=400)
-    try:
-        data = await get_battle_status(battle_id, include_hits)
-    
-    except Exception:
-        log.error()
-        return json_response({"error": "Battle not found"}, status=404)
-    
-    return json_response(formatter.format_row(data))
+async def status(request):
+    prisma = request.config_dict["prisma"]
+    battle_id = int(request.match_info["id"])
 
-@routes.get("/hits/{battle_id}")
-async def get_hits(request: Request):
-    battle_id = request.match_info["battle_id"]
-    if not battle_id:
-        return json_response({"error": "Missing battle id"}, status=400)
-    
-    try:
-        data = await get_battle_hits(battle_id)
+    battle = await prisma.battles.find_unique(
+        where={"id": battle_id},
+        include={
+            "entries": True,
+            "rounds": {
+                "order": {"round_number": "asc"}
+            }
+        },
+    )
 
-    except Exception:
-        return json_response({"error": "Battle not found"}, status=404)
-    
-    return json_response(list(formatter.format_row(row) for row in data))
+    if not battle:
+        return json_response({"error": "not found"}, status=404)
+
+    entries = []
+    for e in battle.entries:
+        entries.append({
+            "slot": e.slot,
+            "address": e.address,
+            "worker": e.worker_name,
+            "pv": e.current_pv,
+            "rounds_won": e.rounds_won,
+            "status": e.status,
+        })
+
+    rounds = []
+    for r in battle.rounds:
+        rounds.append({
+            "round": r.round_number,
+            "block": r.block_height,
+            "winner_entry_id": int(r.winner_entry_id) if r.winner_entry_id is not None else None,
+        })
+
+    return json_response({
+        "id": int(battle.id),
+        "status": battle.status,
+        "initial_pv": battle.initial_pv,
+        "entries": entries,
+        "rounds": rounds,
+    })
