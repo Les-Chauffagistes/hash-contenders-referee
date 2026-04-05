@@ -3,8 +3,6 @@ import pytest_asyncio
 import pytest
 from src.modules.logger.logger import Logger
 from src.rules.Referee import Referee
-from state import client_webosckets
-
 
 
 # NE PAS RÉUTILISER. UTILISER prisma_tx SI BESOIN DE PRISMA
