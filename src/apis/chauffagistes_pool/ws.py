@@ -44,7 +44,7 @@ class WebsocketWrapper:
 
             elif data.get("type") == "share":
                 parsed_data = Share(**data["share"])
-                log.debug(from_number_to_string(int(parsed_data.sdiff)), "from", parsed_data.worker, " at ", datetime.fromtimestamp(parsed_data.ts).strftime("%H:%M:%S"), " at block ", int(parsed_data.round, 16))
+                log.debug(from_number_to_string(int(parsed_data.sdiff)), "from", parsed_data.worker, "at", datetime.fromtimestamp(parsed_data.ts).strftime("%H:%M:%S"), "at block", int(parsed_data.round, 16))
 
             else:
                 log.warn("Unknown message type", data)
@@ -82,6 +82,7 @@ class WebsocketWrapper:
         worker_task = asyncio.create_task(self._message_worker())
         while self._running:
             reason = "Connxion fermée"
+            error = None
             try:
                 self.status = Status.CONNECTING
                 line = log.info("Connecting to", self.uri)
