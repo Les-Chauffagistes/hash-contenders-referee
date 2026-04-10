@@ -81,7 +81,7 @@ class WebsocketWrapper:
     async def continuous_listener(self):
         worker_task = asyncio.create_task(self._message_worker())
         while self._running:
-            reason = "Connxion fermée"
+            reason = "Connexion fermée"
             error = None
             try:
                 self.status = Status.CONNECTING
@@ -101,13 +101,10 @@ class WebsocketWrapper:
 
             except websockets.WebSocketException as e:
                 reason, error = "Déconnecté", e
-
             except OSError as e:
                 reason, error = "Connexion refusée", e
-
             except Exception as e:
                 reason, error = str(e), e
-
             finally:
                 self._ws = None
                 await self._disconect_and_reconnect(reason, error)
