@@ -42,6 +42,9 @@ class Referee:
             FROM "rounds"
             WHERE battle_id = $1
             AND contender_1_best_diff > contender_2_best_diff
+            AND finalized_at IS NOT NULL
+            AND winner IS NOT NULL
+
             """,
             battle.id,
         )
@@ -52,6 +55,8 @@ class Referee:
             FROM "rounds"
             WHERE battle_id = $1
             AND contender_1_best_diff < contender_2_best_diff
+            AND finalized_at IS NOT NULL
+            AND winner IS NOT NULL
             """,
             battle.id,
         )

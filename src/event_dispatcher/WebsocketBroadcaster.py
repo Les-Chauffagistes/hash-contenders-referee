@@ -32,7 +32,6 @@ class WebsocketBroadcaster:
             battle.id,
             {
                 "type": "HIT_RESULT",
-                # "round": round_number,
                 "block_height": hex(block_height),
                 "winner": winner,
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

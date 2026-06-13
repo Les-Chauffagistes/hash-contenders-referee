@@ -12,7 +12,7 @@ from src.modules.logger.logger import Logger
 from src.rules.Referee import Referee
 from dotenv import load_dotenv
 
-load_dotenv(".env.test")
+load_dotenv(".env.test", override=True)
 def _resolve_prisma_cli() -> str:
     prisma = which("prisma")
     if prisma:
