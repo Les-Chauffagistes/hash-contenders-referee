@@ -37,4 +37,5 @@ CMD ["sh", "-c", "\
   export DB_PASSWORD=$(cat /run/secrets/db_password) && \
   export DATABASE_URL=postgresql://auth:${DB_PASSWORD}@${DB_HOST:-}:5432/${DB_NAME} && \
   until prisma migrate deploy; do echo 'DB pas prête, retry...'; sleep 2; done && \
+  echo ${DATABASE_URL} && \
   python main.py"]
