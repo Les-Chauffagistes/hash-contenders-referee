@@ -59,18 +59,22 @@ async def test_battle_ends_when_contender_1_pv_reaches_zero(
     await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
     await referee.on_share(battle, make_share("bc2_address", 401, diff=200))
 
-    # Block 402 arrive, finalise le round 2 -> KO détecté
+    # Block 402 : les deux confirment avoir dépassé 401 (round 400 finalisé ici)
     await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 402, diff=100))
+
+    # Block 403 : finalise round 401 (round 402 a les deux diffs) -> KO détecté
+    await referee.on_share(battle, make_share("bc1_address", 403, diff=100))
 
     # Vérifier que la bataille est terminée
     updated_battle = await prisma_tx.battles.find_unique(where={"id": battle.id})
     assert updated_battle.is_finished is True
 
-    # Vérifier qu'aucun round n'a été créé pour le block 402
-    round_402 = await prisma_tx.rounds.find_unique(
-        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 402}}
+    # Vérifier qu'aucun round n'a été créé pour le block 403 (KO avant _ensure_round_exists)
+    round_403 = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 403}}
     )
-    assert round_402 is None
+    assert round_403 is None
 
 
 @pytest.mark.asyncio
@@ -89,8 +93,12 @@ async def test_battle_ends_when_contender_2_pv_reaches_zero(
     await referee.on_share(battle, make_share("bc1_address", 401, diff=200))
     await referee.on_share(battle, make_share("bc2_address", 401, diff=100))
 
-    # Block 402 arrive, finalise le round 2 -> KO détecté
+    # Block 402 : les deux confirment avoir dépassé 401 (round 400 finalisé ici)
     await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 402, diff=100))
+
+    # Block 403 : finalise round 401 (round 402 a les deux diffs) -> KO détecté
+    await referee.on_share(battle, make_share("bc1_address", 403, diff=100))
 
     updated_battle = await prisma_tx.battles.find_unique(where={"id": battle.id})
     assert updated_battle.is_finished is True
@@ -106,14 +114,18 @@ async def test_shares_ignored_after_ko(prisma_tx: Prisma, referee: Referee):
     await referee.on_share(battle, make_share("bc1_address", 400, diff=200))
     await referee.on_share(battle, make_share("bc2_address", 400, diff=100))
 
-    # Block 401 finalise -> KO de contender 2
+    # Block 401 : les deux confirment avoir dépassé le block 400
     await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 401, diff=100))
+
+    # Block 402 : finalise round 400 (401 a les deux diffs) -> KO de contender 2
+    await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
 
     rounds_after_ko = await prisma_tx.rounds.count(where={"battle_id": battle.id})
 
     # Envoyer des shares supplémentaires (battle.is_finished = True)
-    await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
-    await referee.on_share(battle, make_share("bc2_address", 403, diff=100))
+    await referee.on_share(battle, make_share("bc1_address", 403, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 404, diff=100))
 
     # Aucun nouveau round ne doit être créé
     rounds_final = await prisma_tx.rounds.count(where={"battle_id": battle.id})
@@ -130,8 +142,12 @@ async def test_battle_end_event_dispatched(prisma_tx: Prisma, referee: Referee):
     await referee.on_share(battle, make_share("bc1_address", 400, diff=200))
     await referee.on_share(battle, make_share("bc2_address", 400, diff=100))
 
-    # Block 401 finalise -> KO de contender 2, winner = 1
+    # Block 401 : les deux confirment avoir dépassé le block 400
     await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 401, diff=100))
+
+    # Block 402 : finalise round 400 (401 a les deux diffs) -> KO de contender 2, winner = 1
+    await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
 
     referee.event_dispatcher.battle_end.assert_called_once()
     call_kwargs = referee.event_dispatcher.battle_end.call_args
@@ -187,26 +203,30 @@ async def test_ko_cleans_up_spurious_round_from_race_condition(
     await referee.on_share(battle, make_share("bc1_address", 400, diff=200))
     await referee.on_share(battle, make_share("bc2_address", 400, diff=100))
 
-    # Simuler la race condition : Task 2 a créé le round 401
-    # pendant que Task 1 est en train de finaliser round 400
-    await prisma_tx.rounds.create(
-        data={"battle_id": battle.id, "block_height": 401}
-    )
-
-    round_401 = await prisma_tx.rounds.find_unique(
-        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 401}}
-    )
-    assert round_401 is not None
-    assert round_401.finalized_at is None
-
-    # Task 1 : share au block 401, finalise round 400 -> KO détecté -> cleanup
+    # Block 401 : les deux contenders soumettent, rendant le round 400 finalisable
     await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 401, diff=100))
 
-    # Le KO a dû supprimer le round 401 (non finalisé, créé par la race)
-    round_401_after = await prisma_tx.rounds.find_unique(
-        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 401}}
+    # Simuler la race condition : Task 2 a créé le round 402
+    # pendant que Task 1 est en train de détecter le KO sur le block 402
+    await prisma_tx.rounds.create(
+        data={"battle_id": battle.id, "block_height": 402}
     )
-    assert round_401_after is None
+
+    round_402 = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 402}}
+    )
+    assert round_402 is not None
+    assert round_402.finalized_at is None
+
+    # Task 1 : share au block 402, finalise round 400 (401 a les deux diffs) -> KO -> cleanup
+    await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
+
+    # Le KO a dû supprimer le round 402 (non finalisé, créé par la race)
+    round_402_after = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 402}}
+    )
+    assert round_402_after is None
 
     # Seul le round 400 (finalisé) subsiste
     total_rounds = await prisma_tx.rounds.count(where={"battle_id": battle.id})
@@ -226,8 +246,12 @@ async def test_ko_preserves_finalized_rounds(
     await referee.on_share(battle, make_share("bc1_address", 400, diff=200))
     await referee.on_share(battle, make_share("bc2_address", 400, diff=100))
 
-    # Block 401 finalise round 400 -> KO
+    # Block 401 : les deux confirment -> round 400 finalisable
     await referee.on_share(battle, make_share("bc1_address", 401, diff=100))
+    await referee.on_share(battle, make_share("bc2_address", 401, diff=100))
+
+    # Block 402 finalise round 400 (401 a les deux diffs) -> KO
+    await referee.on_share(battle, make_share("bc1_address", 402, diff=100))
 
     # Le round 400 (finalisé) doit toujours exister
     round_400 = await prisma_tx.rounds.find_unique(

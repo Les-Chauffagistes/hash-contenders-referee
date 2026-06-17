@@ -195,10 +195,8 @@ async def test_finalize_rounds_still_works_after_max(
     referee.event_dispatcher = AsyncMock()
 
     # Créer le round 1 avec des shares des deux contenders
-    share1_c1 = make_share("bc1_address", block_height=400, diff=100.0)
-    await referee.on_share(battle, share1_c1)
-    share1_c2 = make_share("bc2_address", block_height=400, diff=50.0)
-    await referee.on_share(battle, share1_c2)
+    await referee.on_share(battle, make_share("bc1_address", block_height=400, diff=100.0))
+    await referee.on_share(battle, make_share("bc2_address", block_height=400, diff=50.0))
 
     # Vérifier que le round 1 n'est pas encore finalisé
     round1 = await prisma_tx.rounds.find_unique(
@@ -207,22 +205,28 @@ async def test_finalize_rounds_still_works_after_max(
     assert round1 is not None
     assert round1.finalized_at is None
 
-    # Créer le round 2 - cela devrait finaliser le round 1
-    share2 = make_share("bc1_address", block_height=401, diff=75.0)
-    await referee.on_share(battle, share2)
+    # Créer le round 2 avec les deux contenders
+    await referee.on_share(battle, make_share("bc1_address", block_height=401, diff=75.0))
+    await referee.on_share(battle, make_share("bc2_address", block_height=401, diff=60.0))
 
-    # Vérifier que le round 1 est maintenant finalisé
+    # Le round 1 n'est toujours pas finalisé : il faut un share au block 402 pour trigger
+    round1_before = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
+    )
+    assert round1_before.finalized_at is None
+
+    # Share après le max (block 402) :
+    # - finalise round 1 via finalize_rounds (round 2 a les deux diffs)
+    # - finalise round 2 (dernier round) via _force_finalize_last_round
+    await referee.on_share(battle, make_share("bc1_address", block_height=402))
+
+    # Vérifier que le round 1 est finalisé
     round1_updated = await prisma_tx.rounds.find_unique(
         where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
     )
     assert round1_updated is not None
     assert round1_updated.finalized_at is not None
     assert round1_updated.winner == 1  # contender 1 a gagné (100 > 50)
-
-    # Envoyer un share après le max (block 402)
-    # Cela devrait finaliser le round 2 mais ne pas créer de round 3
-    share_after = make_share("bc1_address", block_height=402)
-    await referee.on_share(battle, share_after)
 
     # Vérifier que le round 2 est finalisé
     round2 = await prisma_tx.rounds.find_unique(

@@ -14,6 +14,7 @@ class WebsocketBroadcaster:
                 "type": "BEST_SHARE_UPDATE",
                 "user": contender,
                 "diff": payload.sdiff,
+                "block_height": payload.round,
             },
         )
 

@@ -115,8 +115,9 @@ class Referee:
         )
     
     async def finalize_rounds(self, battle_id: int, next_block_height: int):
-        # Update uniquement les rounds non finalisés avant le bloc actuel
-        # RETURNING permet de récupérer uniquement les rounds réellement fermés
+        # Un round n est finalisé uniquement quand les deux contenders ont soumis
+        # pour un block supérieur à n, évitant de clore un round avant que le pool
+        # adverse ait eu le temps d'envoyer ses shares.
         rows = await self.prisma.query_raw(
             """
             UPDATE rounds
@@ -130,12 +131,48 @@ class Referee:
             WHERE battle_id = $1
             AND block_height < $2
             AND finalized_at IS NULL
+            AND EXISTS (
+                SELECT 1 FROM rounds r1
+                WHERE r1.battle_id = rounds.battle_id
+                AND r1.block_height > rounds.block_height
+                AND r1.contender_1_best_diff > 0
+            )
+            AND EXISTS (
+                SELECT 1 FROM rounds r2
+                WHERE r2.battle_id = rounds.battle_id
+                AND r2.block_height > rounds.block_height
+                AND r2.contender_2_best_diff > 0
+            )
             RETURNING block_height, winner, contender_1_best_diff, contender_2_best_diff;
             """,
             battle_id,
             next_block_height,
         )
         return rows  # seulement les rounds fermés
+
+    async def _force_finalize_last_round(self, battle_id: int, block_height: int) -> list:
+        """Finalise le round `block_height` si les deux contenders ont soumis (diffs > 0).
+        Utilisé quand le max de rounds est atteint et qu'aucun round supérieur ne sera créé."""
+        return await self.prisma.query_raw(
+            """
+            UPDATE rounds
+            SET
+                finalized_at = NOW(),
+                winner = CASE
+                    WHEN contender_1_best_diff > contender_2_best_diff THEN 1
+                    WHEN contender_2_best_diff > contender_1_best_diff THEN 2
+                    ELSE NULL
+                END
+            WHERE battle_id = $1
+            AND block_height = $2
+            AND finalized_at IS NULL
+            AND contender_1_best_diff > 0
+            AND contender_2_best_diff > 0
+            RETURNING block_height, winner, contender_1_best_diff, contender_2_best_diff;
+            """,
+            battle_id,
+            block_height,
+        )
 
     async def on_share(self, battle: battles, payload: Share):
         # self.log.debug(
@@ -205,6 +242,22 @@ class Referee:
             self.log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : round non créé (max rounds atteint)"
             )
+            last_round = await self.get_current_round(battle.id)
+            if last_round:
+                closed = await self._force_finalize_last_round(battle.id, last_round.block_height)
+                if closed:
+                    for r in closed:
+                        pv1, pv2 = await self.compute_pv(battle)
+                        await self.event_dispatcher.hit_result(
+                            battle=battle,
+                            winner=r["winner"],
+                            block_height=r["block_height"],
+                            contender_1_best_diff=r["contender_1_best_diff"],
+                            contender_2_best_diff=r["contender_2_best_diff"],
+                            contender_1_pv=pv1,
+                            contender_2_pv=pv2,
+                        )
+                    await self._check_ko(battle)
             return
 
         self.log.debug(
