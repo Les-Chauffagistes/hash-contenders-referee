@@ -3,7 +3,7 @@ from aiohttp.web import WebSocketResponse
 
 
 
-class ClientWebsockets():
+class ClientWebsockets:
     def __init__(self):
         self.__websockets: dict[int, list[WebSocketResponse]] = {}
     
@@ -22,5 +22,10 @@ class ClientWebsockets():
                 log.warn("Failed to send message to client. Removing client...")
                 self.__websockets[battle_id].remove(ws)
                 await ws.close()
+
+    async def close(self, battle_id: int):
+        for ws in list(self.__websockets.get(battle_id, [])):
+            await ws.close()
+        self.__websockets.pop(battle_id, None)
 
 client_webosckets = ClientWebsockets()

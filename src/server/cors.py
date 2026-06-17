@@ -14,5 +14,10 @@ cors = aiohttp_cors.setup(
             expose_headers="*",
             allow_headers="*"
         ),
+        "http://localhost:3000": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*"
+        ),
     }
 )

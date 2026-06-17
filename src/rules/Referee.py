@@ -206,22 +206,7 @@ class Referee:
             f"[BATTLE {battle.id}] Traitement du share pour block {block_height}"
         )
 
-        closed_rounds = await self._finalize_and_broadcast(battle, block_height)
-
-        self.log.debug(
-            f"[BATTLE {battle.id}] Rounds fermés = {len(closed_rounds)}"
-        )
-
-        if closed_rounds:
-            for r in closed_rounds:
-                self.log.debug(
-                    f"[BATTLE {battle.id}] Round fermé | block={r['block_height']} "
-                    f"winner={r['winner']} "
-                    f"diff1={r['contender_1_best_diff']} "
-                    f"diff2={r['contender_2_best_diff']}"
-                )
-
-        if closed_rounds and await self._check_ko(battle):
+        if await self._finalize_and_broadcast(battle, block_height):
             self.log.debug(
                 f"[BATTLE {battle.id}] KO détecté après fermeture de round"
             )
@@ -258,6 +243,7 @@ class Referee:
                             contender_2_pv=pv2,
                         )
                     await self._check_ko(battle)
+                    await self.event_dispatcher.client_websockets.close(battle.id)
             return
 
         self.log.debug(
@@ -270,8 +256,8 @@ class Referee:
             f"[BATTLE {battle.id}] Fin traitement share diff={payload.sdiff}"
         )
 
-    async def _finalize_and_broadcast(self, battle: battles, block_height: int) -> list:
-        """Finalise les rounds précédents et broadcast hit_result pour chacun."""
+    async def _finalize_and_broadcast(self, battle: battles, block_height: int) -> bool:
+        """Finalise les rounds précédents, broadcast hit_result, vérifie le KO. Renvoie True si KO."""
         closed_rounds = await self.finalize_rounds(battle.id, block_height)
         for r in closed_rounds:
             pv1, pv2 = await self.compute_pv(battle)
@@ -284,7 +270,9 @@ class Referee:
                 contender_1_pv=pv1,
                 contender_2_pv=pv2,
             )
-        return closed_rounds
+        if closed_rounds:
+            return await self._check_ko(battle)
+        return False
 
     async def _check_ko(self, battle: battles) -> bool:
         """Vérifie si un contender est KO (PV ≤ 0). Renvoie True si la bataille est terminée."""
