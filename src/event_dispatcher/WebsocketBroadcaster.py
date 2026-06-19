@@ -1,7 +1,7 @@
 from datetime import datetime
 from state import ClientWebsockets
 from prisma.models import battles
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 
 
 class WebsocketBroadcaster:
@@ -13,7 +13,8 @@ class WebsocketBroadcaster:
             {
                 "type": "BEST_SHARE_UPDATE",
                 "user": contender,
-                "diff": payload.diff,
+                "diff": payload.sdiff,
+                "block_height": payload.round,
             },
         )
 
@@ -32,7 +33,6 @@ class WebsocketBroadcaster:
             battle.id,
             {
                 "type": "HIT_RESULT",
-                # "round": round_number,
                 "block_height": hex(block_height),
                 "winner": winner,
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

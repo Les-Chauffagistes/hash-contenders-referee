@@ -46,6 +46,7 @@ async def main():
 
 if __name__ == "__main__":
     import src.server.handlers.v1
+    import src.server.health
 
     app.add_routes(routes)
     paths = []

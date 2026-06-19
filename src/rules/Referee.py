@@ -1,7 +1,7 @@
 from prisma import Prisma
 from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 from src.modules.logger.logger import Logger
 
 
@@ -42,6 +42,9 @@ class Referee:
             FROM "rounds"
             WHERE battle_id = $1
             AND contender_1_best_diff > contender_2_best_diff
+            AND finalized_at IS NOT NULL
+            AND winner IS NOT NULL
+
             """,
             battle.id,
         )
@@ -52,6 +55,8 @@ class Referee:
             FROM "rounds"
             WHERE battle_id = $1
             AND contender_1_best_diff < contender_2_best_diff
+            AND finalized_at IS NOT NULL
+            AND winner IS NOT NULL
             """,
             battle.id,
         )
@@ -74,6 +79,7 @@ class Referee:
             battle_id,
             block_height,
         )
+        self.log.info("Created round?", result)
         return result == 1
 
     async def _get_rounds_to_close(self, battle: battles, block_height: int):
@@ -109,8 +115,9 @@ class Referee:
         )
     
     async def finalize_rounds(self, battle_id: int, next_block_height: int):
-        # Update uniquement les rounds non finalisés avant le bloc actuel
-        # RETURNING permet de récupérer uniquement les rounds réellement fermés
+        # Un round n est finalisé uniquement quand les deux contenders ont soumis
+        # pour un block supérieur à n, évitant de clore un round avant que le pool
+        # adverse ait eu le temps d'envoyer ses shares.
         rows = await self.prisma.query_raw(
             """
             UPDATE rounds
@@ -124,6 +131,18 @@ class Referee:
             WHERE battle_id = $1
             AND block_height < $2
             AND finalized_at IS NULL
+            AND EXISTS (
+                SELECT 1 FROM rounds r1
+                WHERE r1.battle_id = rounds.battle_id
+                AND r1.block_height > rounds.block_height
+                AND r1.contender_1_best_diff > 0
+            )
+            AND EXISTS (
+                SELECT 1 FROM rounds r2
+                WHERE r2.battle_id = rounds.battle_id
+                AND r2.block_height > rounds.block_height
+                AND r2.contender_2_best_diff > 0
+            )
             RETURNING block_height, winner, contender_1_best_diff, contender_2_best_diff;
             """,
             battle_id,
@@ -131,40 +150,114 @@ class Referee:
         )
         return rows  # seulement les rounds fermés
 
+    async def _force_finalize_last_round(self, battle_id: int, block_height: int) -> list:
+        """Finalise le round `block_height` si les deux contenders ont soumis (diffs > 0).
+        Utilisé quand le max de rounds est atteint et qu'aucun round supérieur ne sera créé."""
+        return await self.prisma.query_raw(
+            """
+            UPDATE rounds
+            SET
+                finalized_at = NOW(),
+                winner = CASE
+                    WHEN contender_1_best_diff > contender_2_best_diff THEN 1
+                    WHEN contender_2_best_diff > contender_1_best_diff THEN 2
+                    ELSE NULL
+                END
+            WHERE battle_id = $1
+            AND block_height = $2
+            AND finalized_at IS NULL
+            AND contender_1_best_diff > 0
+            AND contender_2_best_diff > 0
+            RETURNING block_height, winner, contender_1_best_diff, contender_2_best_diff;
+            """,
+            battle_id,
+            block_height,
+        )
+
     async def on_share(self, battle: battles, payload: Share):
+        # self.log.debug(
+        #     f"[BATTLE {battle.id}] Share reçu | worker={payload.worker} diff={payload.diff} "
+        #     f"round={payload.round} replay={replay}"
+        # )
+
+
         block_height = int(payload.round, 16)
+
+        self.log.debug(
+            f"[BATTLE {battle.id}] Block height décodé = {block_height}"
+        )
 
         # Ignorer les shares si la bataille est terminée
         if battle.is_finished:
             self.log.debug(
-                f"Ignoring share for battle {battle.id}, battle is already finished"
+                f"[BATTLE {battle.id}] Share ignoré : battle déjà terminée"
             )
             return
 
         # Ignorer les shares avant le début de la bataille
         if block_height < battle.start_height:
             self.log.debug(
-                f"Ignoring share for battle {battle.id} at block {block_height}, "
-                f"before start_height {battle.start_height}"
+                f"[BATTLE {battle.id}] Share ignoré : block {block_height} "
+                f"< start_height {battle.start_height}"
             )
             return
 
-        closed_rounds = await self._finalize_and_broadcast(battle, block_height)
+        self.log.debug(
+            f"[BATTLE {battle.id}] Traitement du share pour block {block_height}"
+        )
 
-        if closed_rounds and await self._check_ko(battle):
+        if await self._finalize_and_broadcast(battle, block_height):
+            self.log.debug(
+                f"[BATTLE {battle.id}] KO détecté après fermeture de round"
+            )
             return
 
         # Re-vérifier après les awaits : l'autre task a pu clôturer la bataille
         if battle.is_finished:
+            self.log.debug(
+                f"[BATTLE {battle.id}] Battle terminée pendant le traitement"
+            )
             return
 
+        self.log.debug(
+            f"[BATTLE {battle.id}] Vérification / création du round pour block {block_height}"
+        )
+
         if not await self._ensure_round_exists(battle, block_height, payload):
+            self.log.debug(
+                f"[BATTLE {battle.id}] Share ignoré : round non créé (max rounds atteint)"
+            )
+            last_round = await self.get_current_round(battle.id)
+            if last_round:
+                closed = await self._force_finalize_last_round(battle.id, last_round.block_height)
+                if closed:
+                    for r in closed:
+                        pv1, pv2 = await self.compute_pv(battle)
+                        await self.event_dispatcher.hit_result(
+                            battle=battle,
+                            winner=r["winner"],
+                            block_height=r["block_height"],
+                            contender_1_best_diff=r["contender_1_best_diff"],
+                            contender_2_best_diff=r["contender_2_best_diff"],
+                            contender_1_pv=pv1,
+                            contender_2_pv=pv2,
+                        )
+                    await self._check_ko(battle)
+                    await self.event_dispatcher.client_websockets.close(battle.id)
             return
+
+        self.log.debug(
+            f"[BATTLE {battle.id}] Round OK, tentative mise à jour best share"
+        )
 
         await self._update_best_share(battle, block_height, payload)
 
-    async def _finalize_and_broadcast(self, battle: battles, block_height: int) -> list:
-        """Finalise les rounds précédents et broadcast hit_result pour chacun."""
+        self.log.debug(
+            f"[BATTLE {battle.id}] Fin traitement share diff={payload.sdiff}"
+        )
+
+    async def _finalize_and_broadcast(self, battle: battles, block_height: int) -> bool:
+        """Finalise les rounds précédents, broadcast hit_result, vérifie le KO. Renvoie True si KO."""
         closed_rounds = await self.finalize_rounds(battle.id, block_height)
         for r in closed_rounds:
             pv1, pv2 = await self.compute_pv(battle)
@@ -177,7 +270,9 @@ class Referee:
                 contender_1_pv=pv1,
                 contender_2_pv=pv2,
             )
-        return closed_rounds
+        if closed_rounds:
+            return await self._check_ko(battle)
+        return False
 
     async def _check_ko(self, battle: battles) -> bool:
         """Vérifie si un contender est KO (PV ≤ 0). Renvoie True si la bataille est terminée."""
@@ -257,6 +352,6 @@ class Referee:
             self.log.warn("Received share from unknown address")
             return
 
-        rows = await self.prisma.execute_raw(query, battle.id, int(payload.diff), block_height)
+        rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)
         if rows:
             await self.event_dispatcher.new_best_share(battle, contender, payload)

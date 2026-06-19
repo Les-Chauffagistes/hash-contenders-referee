@@ -1,0 +1,19 @@
+name: CI
+ 
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*.*.*"]
+  pull_request:
+
+ 
+jobs:
+  build-push:
+    uses: Les-Chauffagistes/deploy/.github/workflows/build.yml@develop
+    with:
+      service-name: hash-contenders-referee
+    secrets:
+      REGISTRY_USER:     ${{ secrets.REGISTRY_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      ORG_PAT:           ${{ secrets.ORG_PAT }}
+ 

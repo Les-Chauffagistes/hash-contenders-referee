@@ -18,7 +18,7 @@ FROM python:3.12-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl \
+    libpq5 curl libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
@@ -31,6 +31,11 @@ COPY . .
 EXPOSE ${SERVER_PORT:-8095}
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${SERVER_PORT:-8095}/v1/health || exit 1
+    CMD curl -f http://localhost:${SERVER_PORT:-8095}/health || exit 1
 
-CMD ["python", "main.py"]
+CMD ["sh", "-c", "\
+  export DB_PASSWORD=$(cat /run/secrets/db_password) && \
+  export DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-}:5432/${DB_NAME} && \
+  export API_TOKEN=$(cat /run/secrets/api_token) && \
+  until prisma migrate deploy; do echo 'DB pas prête, retry...'; sleep 2; done && \
+  python main.py"]

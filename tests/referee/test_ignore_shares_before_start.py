@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 from src.rules.Referee import Referee
-from src.apis.chauffagistes_pool.models.Share import Share
+from pool_api_types.models import Share
 from prisma import Prisma
 
 
@@ -10,25 +10,22 @@ def make_share(address: str, block_height: int, diff: float = 100.0) -> Share:
     return Share(
         workinfoid=1,
         clientid=1,
-        enonce1="",
-        enonce2="",
-        nonce="",
-        ntime="",
         diff=diff,
-        sdiff=None,
+        sdiff=float(diff),
         hash="",
         result=True,
         errn=0,
-        createdate=0.0,
-        createby="",
-        createcode="",
-        createinet="",
+        createdate="",
+        ts=0.0,
         workername="",
         username="",
         address=address,
+        worker="",
+        workernameAddr="",
+        ip="",
         agent="",
-        reject_reason=None,
         round=hex(block_height),
+        file="",
     )
 
 
