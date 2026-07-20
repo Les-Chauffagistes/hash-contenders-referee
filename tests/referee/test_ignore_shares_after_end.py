@@ -241,6 +241,44 @@ async def test_finalize_rounds_still_works_after_max(
 
 
 @pytest.mark.asyncio
+async def test_battle_marked_finished_when_max_rounds_reached_without_ko(
+    prisma_tx: Prisma, referee: Referee
+):
+    """Atteindre le max de rounds sans KO doit terminer la bataille (is_finished = True),
+    avec le vainqueur décidé aux PV."""
+    battle = await prisma_tx.battles.create(
+        data={
+            "id": 1,
+            "rounds": 2,
+            "contender_1_address": "bc1_address",
+            "contender_1_name": "Contender 1",
+            "contender_2_address": "bc2_address",
+            "contender_2_name": "Contender 2",
+            "contenders_pv": 100,  # PV élevés : aucun KO possible sur 2 rounds
+            "start_height": 400,
+        }
+    )
+
+    referee.event_dispatcher = AsyncMock()
+
+    # Round 1 (block 400) et round 2 (block 401) : contender 1 gagne les deux
+    await referee.on_share(battle, make_share("bc1_address", block_height=400, diff=200))
+    await referee.on_share(battle, make_share("bc2_address", block_height=400, diff=100))
+    await referee.on_share(battle, make_share("bc1_address", block_height=401, diff=200))
+    await referee.on_share(battle, make_share("bc2_address", block_height=401, diff=100))
+
+    # Block 402 : max atteint -> finalise round 401 et termine la bataille sans KO
+    await referee.on_share(battle, make_share("bc1_address", block_height=402, diff=100))
+
+    updated_battle = await prisma_tx.battles.find_unique(where={"id": battle.id})
+    assert updated_battle.is_finished is True
+
+    # battle_end broadcasté avec contender 1 vainqueur (2 rounds gagnés)
+    referee.event_dispatcher.battle_end.assert_called_once()
+    assert referee.event_dispatcher.battle_end.call_args.kwargs["winner"] == 1
+
+
+@pytest.mark.asyncio
 async def test_single_round_battle(prisma_tx: Prisma, referee: Referee):
     """Une bataille avec un seul round fonctionne correctement"""
     battle = await prisma_tx.battles.create(

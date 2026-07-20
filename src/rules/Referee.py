@@ -242,7 +242,11 @@ class Referee:
                             contender_1_pv=pv1,
                             contender_2_pv=pv2,
                         )
-                    await self._check_ko(battle)
+                    # Un KO peut survenir sur ce dernier round. Sinon la bataille se
+                    # termine quand même : le max de rounds est atteint et aucun round
+                    # supérieur ne sera créé, donc le vainqueur est décidé aux PV.
+                    if not await self._check_ko(battle):
+                        await self._finish_by_max_rounds(battle)
                     await self.event_dispatcher.client_websockets.close(battle.id)
             return
 
@@ -297,6 +301,23 @@ class Referee:
             )
             return True
         return False
+
+    async def _finish_by_max_rounds(self, battle: battles) -> None:
+        """Termine la bataille quand le max de rounds est atteint sans KO.
+        Le vainqueur est celui qui a le plus de PV restants (égalité => None)."""
+        pv1, pv2 = await self.compute_pv(battle)
+        winner = 1 if pv1 > pv2 else 2 if pv2 > pv1 else None
+        await self.prisma.battles.update(
+            where={"id": battle.id},
+            data={"is_finished": True},
+        )
+        battle.is_finished = True
+        await self.event_dispatcher.battle_end(
+            battle=battle,
+            winner=winner,
+            contender_1_pv=pv1,
+            contender_2_pv=pv2,
+        )
 
     async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
         """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
