@@ -15,6 +15,7 @@ jobs:
     secrets: inherit
 
   build-push:
+    if: github.event_name == 'push'
     needs: test
     uses: Les-Chauffagistes/deploy/.github/workflows/build.yml@develop
     with:
