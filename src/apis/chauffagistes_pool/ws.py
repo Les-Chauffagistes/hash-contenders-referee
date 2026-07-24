@@ -85,7 +85,6 @@ class WebsocketWrapper:
             error = None
             try:
                 self.status = Status.CONNECTING
-                line = log.info("Connecting to", self.uri)
                 async with websockets.connect(
                     self.uri,
                     additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
@@ -93,8 +92,7 @@ class WebsocketWrapper:
                 ) as ws:
                     self._ws = ws
                     self.status = Status.CONNECTED
-                    line.add_text("OK")
-                    line.edit_print()
+                    log.info("Connected to", self.uri)
 
                     async for message in ws:
                         await self._queue.put(message)

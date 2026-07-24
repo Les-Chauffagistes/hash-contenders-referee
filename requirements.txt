@@ -1,5 +1,6 @@
 asyncpg
 aiohttp
+loguru
 pytest
 pytest-asyncio
 testcontainers[postgres]
