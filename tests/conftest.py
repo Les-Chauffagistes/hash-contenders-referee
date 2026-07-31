@@ -1,18 +1,21 @@
+from collections.abc import Generator
 import os
 from pathlib import Path
 from shutil import which
 import subprocess
 import sys
 
-import asyncpg
 from prisma import Prisma
-import pytest_asyncio
 import pytest
+import pytest_asyncio
 from src.modules.logger.logger import Logger
 from src.rules.Referee import Referee
-from dotenv import load_dotenv
+from testcontainers.postgres import PostgresContainer
 
-load_dotenv(".env.test", override=True)
+
+POSTGRES_IMAGE = "postgres:18.1-alpine3.23"
+
+
 def _resolve_prisma_cli() -> str:
     prisma = which("prisma")
     if prisma:
@@ -31,42 +34,29 @@ def _resolve_prisma_cli() -> str:
     )
 
 
-def _ensure_test_db():
-    """Crée la BDD de test et applique le schéma Prisma si nécessaire."""
-    db_url = os.environ["DATABASE_URL"]
-    db_name = db_url.rsplit("/", 1)[-1].split("?")[0]
-    server_url = db_url.rsplit("/", 1)[0] + "/template1"
-
-    import asyncio
-
-    async def _create_db():
-        conn = await asyncpg.connect(server_url)
-        try:
-            exists = await conn.fetchval(
-                "SELECT 1 FROM pg_database WHERE datname = $1", db_name
+@pytest.fixture(scope="session")
+def database_url() -> Generator[str, None, None]:
+    previous_database_url = os.environ.get("DATABASE_URL")
+    try:
+        with PostgresContainer(POSTGRES_IMAGE, driver=None) as postgres:
+            db_url = postgres.get_connection_url()
+            os.environ["DATABASE_URL"] = db_url
+            subprocess.run(
+                [_resolve_prisma_cli(), "migrate", "deploy"],
+                env={**os.environ, "DATABASE_URL": db_url},
+                check=True,
             )
-            if not exists:
-                print("creating", db_name)
-                await conn.execute(f'CREATE DATABASE "{db_name}"')
-        finally:
-            await conn.close()
-
-    asyncio.run(_create_db())
-
-    subprocess.run(
-        [_resolve_prisma_cli(), "db", "push", "--skip-generate"],
-        env={**os.environ, "DATABASE_URL": db_url},
-        check=True,
-        capture_output=True,
-    )
-
-
-_ensure_test_db()
+            yield db_url
+    finally:
+        if previous_database_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous_database_url
 
 
 # NE PAS RÉUTILISER. UTILISER prisma_tx SI BESOIN DE PRISMA
 @pytest_asyncio.fixture
-async def prisma_client():
+async def prisma_client(database_url: str):
     prisma = Prisma()
     await prisma.connect()
     yield prisma

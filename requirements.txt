@@ -1,7 +1,9 @@
 asyncpg
 aiohttp
+loguru
 pytest
 pytest-asyncio
+testcontainers[postgres]
 cachetools
 aiohttp_cors
 python_dotenv

@@ -12,37 +12,36 @@ async def error_handler(request: Request, handler: Callable[[Request], Awaitable
     method = request.method
     match method:
         case "GET":
-            line = log.get(request.path)
-        
+            log_request = log.get
+
         case "POST":
-            line = log.post(request.path)
-        
+            log_request = log.post
+
         case "DELETE":
-            line = log.delete(request.path)
-        
+            log_request = log.delete
+
         case _:
-            line = log.info(request.path)
-    
-    assert line
+            log_request = log.info
+
+    status = None
     try:
         response = await handler(request)
-        line.add_text("HTTP", response.status)
-        line.edit_print()
+        status = response.status
         return response
 
     except Exception as e:
         if isinstance(e, web_exceptions.HTTPUnauthorized):
-            line.add_text("HTTP 401")
+            status = 401
             return json_response({"error": "Unauthorized"}, status=401)
 
         elif isinstance(e, web_exceptions.HTTPNotFound):
-            line.add_text("HTTP 404")
+            status = 404
             return json_response({"error": "Not Found"}, status=404)
 
         else:
             log.error("Unhandled exception while handling request", request.path)
-            line.add_text("HTTP 500")
+            status = 500
             return json_response({"error": "Internal Server Error"}, status=500)
-    
+
     finally:
-        line.edit_print()
+        log_request(request.path, status if status is not None else "ERROR")
