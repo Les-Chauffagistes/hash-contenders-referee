@@ -17,7 +17,7 @@ def make_share(address: str, block_height: int, diff: float = 100.0) -> Share:
 async def create_battle(prisma_tx: Prisma, rounds: int = 10, contenders_pv: int = 10):
     return await prisma_tx.battles.create(
         data={
-            "id": 1, "rounds": rounds,
+            "id": 1, "rounds": rounds, "owner_user_id": 1,
             "contender_1_address": "bc1_address", "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address", "contender_2_name": "Contender 2",
             "contenders_pv": contenders_pv, "start_height": 400,

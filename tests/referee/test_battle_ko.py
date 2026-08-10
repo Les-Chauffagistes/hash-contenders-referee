@@ -33,6 +33,7 @@ async def create_battle(prisma_tx: Prisma, contenders_pv: int = 2, rounds: int =
         data={
             "id": 1,
             "rounds": rounds,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
