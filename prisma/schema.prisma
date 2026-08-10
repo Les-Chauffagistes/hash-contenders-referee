@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-py"
+  provider             = "prisma-client-py"
   recursive_type_depth = -1
 }
 
@@ -10,6 +10,7 @@ datasource db {
 
 model battles {
   id                     BigInt   @id @default(autoincrement())
+  owner_user_id          BigInt
   start_height           Int
   rounds                 Int
   contenders_pv          Int

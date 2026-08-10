@@ -80,33 +80,36 @@ class WebsocketWrapper:
 
     async def continuous_listener(self):
         worker_task = asyncio.create_task(self._message_worker())
-        while self._running:
-            reason = "Connexion fermée"
-            error = None
-            try:
-                self.status = Status.CONNECTING
-                async with websockets.connect(
-                    self.uri,
-                    additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
-                    max_size=10 * 1024 * 1024,  # 10MB pour les gros messages
-                ) as ws:
-                    self._ws = ws
-                    self.status = Status.CONNECTED
-                    log.info("Connected to", self.uri)
+        try:
+            while self._running:
+                reason = "Connexion fermée"
+                error = None
+                try:
+                    self.status = Status.CONNECTING
+                    async with websockets.connect(
+                        self.uri,
+                        additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
+                        max_size=10 * 1024 * 1024,  # 10MB pour les gros messages
+                    ) as ws:
+                        self._ws = ws
+                        self.status = Status.CONNECTED
+                        log.info("Connected to", self.uri)
 
-                    async for message in ws:
-                        await self._queue.put(message)
+                        async for message in ws:
+                            await self._queue.put(message)
 
-            except websockets.WebSocketException as e:
-                reason, error = "Déconnecté", e
-            except OSError as e:
-                reason, error = "Connexion refusée", e
-            except Exception as e:
-                reason, error = str(e), e
-            finally:
-                self._ws = None
-                await self._disconect_and_reconnect(reason, error)
-
-        worker_task.cancel()
-        self.status = Status.DISCONNECTED
-        log.info("Listener stopped for", self.uri)
+                except websockets.WebSocketException as e:
+                    reason, error = "Déconnecté", e
+                except OSError as e:
+                    reason, error = "Connexion refusée", e
+                except Exception as e:
+                    reason, error = str(e), e
+                finally:
+                    self._ws = None
+                    await self._disconect_and_reconnect(reason, error)
+        finally:
+            self._running = False
+            worker_task.cancel()
+            await asyncio.gather(worker_task, return_exceptions=True)
+            self.status = Status.DISCONNECTED
+            log.info("Listener stopped for", self.uri)

@@ -4,7 +4,7 @@ services:
       context: .
     command: >
       sh -c "until prisma migrate deploy; do echo 'DB pas prête, retry...'; sleep 2; done &&
-             python main.py"
+             exec python main.py"
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
     env_file:

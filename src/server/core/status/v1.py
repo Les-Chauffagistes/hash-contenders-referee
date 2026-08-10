@@ -13,6 +13,7 @@ class ContenderInfo(TypedDict):
 
 
 class BattleResponse(TypedDict):
+    owner_user_id: int
     battle_id: int
     rounds: int
     contenders_base_pv: int
@@ -74,6 +75,7 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
         hits: list[rounds] = []
 
     return BattleResponse(
+        owner_user_id = battle.owner_user_id,
         battle_id=battle.id,
         rounds=battle.rounds,
         contenders_base_pv=battle.contenders_pv,

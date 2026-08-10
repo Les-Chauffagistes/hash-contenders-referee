@@ -20,7 +20,7 @@ prisma generate
 ```bash
 python main.py
 ```
-Requires `SERVER_PORT`, `DATABASE_URL`, and `API_URL` environment variables (use `.env` file).
+Requires `server_port`, `DATABASE_URL`, and `API_URL` environment variables (use `.env` file).
 
 ### Run Tests
 ```bash
