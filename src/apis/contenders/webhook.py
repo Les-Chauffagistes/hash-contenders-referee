@@ -2,7 +2,6 @@ import asyncio
 
 from aiohttp import ClientSession, ClientTimeout
 
-from src.settings import settings
 from src.modules.logger.logger import Logger
 
 log = Logger()
@@ -26,6 +25,8 @@ class Connector:
     @classmethod
     def get_session(cls) -> ClientSession:
         if cls._session is None:
+            from src.settings import settings
+
             cls._session = ClientSession(
                 base_url=settings.frontend_url, timeout=REQUEST_TIMEOUT
             )
