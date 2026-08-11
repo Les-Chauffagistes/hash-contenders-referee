@@ -3,6 +3,7 @@ from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from pool_api_types.models import Share
 from src.modules.logger.logger import Logger
+from src.apis.contenders import send_termination_event_to_frontend
 
 
 class Referee:
@@ -299,6 +300,8 @@ class Referee:
                 contender_1_pv=pv1,
                 contender_2_pv=pv2,
             )
+            # Fire-and-forget : envoyé seulement une fois is_finished committé en base.
+            send_termination_event_to_frontend(battle.id)
             return True
         return False
 
@@ -318,6 +321,11 @@ class Referee:
             contender_1_pv=pv1,
             contender_2_pv=pv2,
         )
+        # Fire-and-forget : envoyé même en cas d'égalité (winner=None), Next doit
+        # aussi régler/rembourser les paris sur un match nul. Seulement une fois
+        # is_finished committé en base.
+        send_termination_event_to_frontend(battle.id)
+
 
     async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
         """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
