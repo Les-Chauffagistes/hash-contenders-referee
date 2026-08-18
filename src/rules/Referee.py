@@ -357,6 +357,14 @@ class Referee:
 
     async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
         """Identifie le contender et met à jour le best diff si supérieur."""
+        if not payload.result or payload.errn != 0:
+            # Share rejetée côté pool : ne doit jamais pouvoir décider de l'arbitrage.
+            self.log.debug(
+                f"Ignoring invalid share (result={payload.result}, errn={payload.errn}) "
+                f"from {payload.address} at block {block_height}"
+            )
+            return
+
         if payload.address == battle.contender_1_address:
             contender = "contender_1"
             query = """
