@@ -2,13 +2,9 @@ from prisma import Prisma
 from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from pool_api_types.models import Share
-from loguru import Logger
-
-
 class Referee:
 
     prisma: Prisma
-    log: Logger
     event_dispatcher: WebsocketBroadcaster
 
     async def get_current_round(self, battle_id: int):

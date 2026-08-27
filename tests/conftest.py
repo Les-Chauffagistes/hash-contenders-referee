@@ -9,7 +9,6 @@ from prisma import Prisma
 import pytest
 import pytest_asyncio
 from chauff_cmn.logging import configure, logger as _logger
-from loguru import Logger
 from src.rules.Referee import Referee
 from testcontainers.postgres import PostgresContainer
 
@@ -79,7 +78,7 @@ def log():
     yield _logger
 
 @pytest.fixture
-def referee(prisma_tx: Prisma, log: Logger):
+def referee(prisma_tx: Prisma, log):
     referee = Referee()
     referee.prisma = prisma_tx
     referee.log = log
