@@ -28,7 +28,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --trusted-host 10.10.0.3 --extra-index-url "http://${{ secrets.REGISTRY_USER }}:${{ secrets.REGISTRY_PASSWORD }}@10.10.0.3:8081/simple/" -r requirements.txt
 
       - name: Generate Prisma client
         run: prisma generate
