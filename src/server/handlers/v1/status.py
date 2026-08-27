@@ -17,7 +17,7 @@ async def get_status(request: Request):
         data = await get_battle_status(battle_id, include_hits)
     
     except Exception:
-        log.error()
+        log.exception("")
         return json_response({"error": "Battle not found"}, status=404)
     
     return json_response(formatter.format_row(data))

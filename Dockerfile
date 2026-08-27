@@ -7,7 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=secret,id=pipindex \
+    PIP_EXTRA_INDEX_URL="$(cat /run/secrets/pipindex 2>/dev/null || true)" \
+    pip install --no-cache-dir --trusted-host 10.10.0.3 -r requirements.txt
 
 COPY prisma ./prisma
 RUN prisma generate

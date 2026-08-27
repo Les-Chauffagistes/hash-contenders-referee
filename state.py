@@ -19,7 +19,7 @@ class ClientWebsockets:
             try:
                 await ws.send_json(data)
             except Exception:
-                log.warn("Failed to send message to client. Removing client...")
+                log.warning("Failed to send message to client. Removing client...")
                 self.__websockets[battle_id].remove(ws)
                 await ws.close()
 

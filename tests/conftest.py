@@ -8,7 +8,8 @@ import sys
 from prisma import Prisma
 import pytest
 import pytest_asyncio
-from src.modules.logger.logger import Logger
+from chauff_cmn.logging import configure, logger as _logger
+from loguru import Logger
 from src.rules.Referee import Referee
 from testcontainers.postgres import PostgresContainer
 
@@ -74,8 +75,8 @@ async def prisma_tx(prisma_client: Prisma):
 
 @pytest.fixture
 def log():
-    log = Logger()
-    yield log
+    configure(service="hash-contenders-referee-test")
+    yield _logger
 
 @pytest.fixture
 def referee(prisma_tx: Prisma, log: Logger):

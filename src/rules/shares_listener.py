@@ -33,9 +33,8 @@ async def shares_listener():
             for battle in battles:
                 if battle.id not in active:
                     log.info(
-                        f"Added ws for battle {battle.id}",
-                        battle.contender_1_address,
-                        battle.contender_2_address,
+                        f"Added ws for battle {battle.id} "
+                        f"{battle.contender_1_address} {battle.contender_2_address}"
                     )
                     ws1 = WebsocketWrapper(
                         f"{API_URL}/shares?address={battle.contender_1_address}",
@@ -50,6 +49,6 @@ async def shares_listener():
                     active[battle.id] = ws1, ws2, t1, t2
 
         except Exception:
-            log.error("Error in match loop")
+            log.exception("Error in match loop")
 
         await sleep(3)

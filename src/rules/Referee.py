@@ -2,7 +2,7 @@ from prisma import Prisma
 from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from pool_api_types.models import Share
-from src.modules.logger.logger import Logger
+from loguru import Logger
 
 
 class Referee:
@@ -79,7 +79,7 @@ class Referee:
             battle_id,
             block_height,
         )
-        self.log.info("Created round?", result)
+        self.log.info(f"Created round? {result}")
         return result == 1
 
     async def _get_rounds_to_close(self, battle: battles, block_height: int):
@@ -370,7 +370,7 @@ class Referee:
                 RETURNING contender_2_best_diff;
             """
         else:
-            self.log.warn("Received share from unknown address")
+            self.log.warning("Received share from unknown address")
             return
 
         rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)

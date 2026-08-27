@@ -31,11 +31,11 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
         include={"all_rounds": True} if include_hits else None,
     )
     if not battle:
-        log.warn("404")
+        log.warning("404")
         raise Exception("Battle not found")
 
     contender_1_pv, contender_2_pv = await referee.compute_pv(battle)
-    log.info(contender_1_pv, contender_2_pv)
+    log.info(f"{contender_1_pv} {contender_2_pv}")
     current_round_block_height = await referee.get_current_round(battle.id)
     current_round_number = await referee.get_current_round_number(battle.id)
     if current_round_block_height:
