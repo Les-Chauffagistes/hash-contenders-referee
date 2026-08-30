@@ -397,9 +397,9 @@ charset-normalizer==3.5.1 \
     --hash=sha256:fd0a274c0e5f9a21565cd9d3dd749b61f96b7aa1e20a93aa1ba4029518f2e5c0 \
     --hash=sha256:fdb8a068947befafba9952162645dc2fecaeb400e64584829ed5e9b2fbe21a7f
     # via requests
-chauff-cmn==0.0.7 \
-    --hash=sha256:54dfee9a27f17a78e858e5badb870be2e50ec171d46ce57ae5694908ddcf4500 \
-    --hash=sha256:62fc8b074fd86e9ad9f4faaa2c9fcd7b4aaa8cf29fd8e81c58ad9110286f1d18
+chauff-cmn==0.0.11 \
+    --hash=sha256:92367212b295d2d38682899e771fcf3cda0dc6c6abc7fa2e7ff80f16e990524b \
+    --hash=sha256:c334a33345fb4bccd1fbc01c15e9e331a16c91b0819e64754379ff85484b1d06
     # via -r requirements.in
 click==8.5.0 \
     --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360 \
