@@ -3,6 +3,7 @@ from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from pool_api_types.models import Share
 from src.modules.logger.logger import Logger
+from src.apis.contenders import send_termination_event_to_frontend
 
 
 class Referee:
@@ -299,6 +300,8 @@ class Referee:
                 contender_1_pv=pv1,
                 contender_2_pv=pv2,
             )
+            # Fire-and-forget : envoyé seulement une fois is_finished committé en base.
+            send_termination_event_to_frontend(battle.id)
             return True
         return False
 
@@ -318,6 +321,11 @@ class Referee:
             contender_1_pv=pv1,
             contender_2_pv=pv2,
         )
+        # Fire-and-forget : envoyé même en cas d'égalité (winner=None), Next doit
+        # aussi régler/rembourser les paris sur un match nul. Seulement une fois
+        # is_finished committé en base.
+        send_termination_event_to_frontend(battle.id)
+
 
     async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
         """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
@@ -349,6 +357,14 @@ class Referee:
 
     async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
         """Identifie le contender et met à jour le best diff si supérieur."""
+        if not payload.result or payload.errn != 0:
+            # Share rejetée côté pool : ne doit jamais pouvoir décider de l'arbitrage.
+            self.log.debug(
+                f"Ignoring invalid share (result={payload.result}, errn={payload.errn}) "
+                f"from {payload.address} at block {block_height}"
+            )
+            return
+
         if payload.address == battle.contender_1_address:
             contender = "contender_1"
             query = """

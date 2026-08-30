@@ -40,7 +40,7 @@ Module importé en premier. Crée les **singletons globaux** :
 - `app` : Application aiohttp (avec middleware `error_handler`)
 - `referee` : instance `Referee`
 - `event_dispatcher` : instance `WebsocketBroadcaster`
-- `API_URL`, `API_TOKEN` : variables d'env lues ici (exit si absentes)
+- `API_URL`, `api_token` : variables d'env lues ici (exit si absentes)
 
 > ⚠️ Les modules utilisant Prisma doivent être importés **après** `app.on_startup` (i.e., dans `main()`), car Prisma est initialisé au démarrage de l'app.
 

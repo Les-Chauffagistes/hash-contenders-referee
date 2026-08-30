@@ -10,7 +10,7 @@ from .base import routes
 async def list_battles(request: Request):
     return json_response(list(formatter.format_rows(await get_battles())))
 
-@routes.get("/battles/by-ids")
+@routes.post("/battles/by-ids")
 async def list_battles_by_id(request: Request):
     try:
         data = await request.json()

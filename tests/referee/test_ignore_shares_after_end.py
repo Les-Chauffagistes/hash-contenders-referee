@@ -38,6 +38,7 @@ async def test_ignore_share_after_max_rounds_reached(
         data={
             "id": 1,
             "rounds": 3,  # Seulement 3 rounds autorisés
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -75,6 +76,7 @@ async def test_allow_share_on_last_round_in_progress(
         data={
             "id": 1,
             "rounds": 3,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -112,6 +114,7 @@ async def test_allow_both_contenders_on_last_round(
         data={
             "id": 1,
             "rounds": 2,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -148,6 +151,7 @@ async def test_ignore_multiple_shares_after_end(prisma_tx: Prisma, referee: Refe
         data={
             "id": 1,
             "rounds": 2,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -183,6 +187,7 @@ async def test_finalize_rounds_still_works_after_max(
         data={
             "id": 1,
             "rounds": 2,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -250,6 +255,7 @@ async def test_battle_marked_finished_when_max_rounds_reached_without_ko(
         data={
             "id": 1,
             "rounds": 2,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -285,6 +291,7 @@ async def test_single_round_battle(prisma_tx: Prisma, referee: Referee):
         data={
             "id": 1,
             "rounds": 1,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
