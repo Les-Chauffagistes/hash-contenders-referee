@@ -1,10 +1,6 @@
 import asyncio
-
+from chauff_cmn.logging import logger as log
 from aiohttp import ClientSession, ClientTimeout
-
-from src.modules.logger.logger import Logger
-
-log = Logger()
 
 # Court volontairement : ce chemin est fire-and-forget, on ne veut pas retarder
 # le Referee en attendant une réponse de Next.js.

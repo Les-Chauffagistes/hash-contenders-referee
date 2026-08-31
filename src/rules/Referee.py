@@ -2,7 +2,6 @@ from prisma import Prisma
 from prisma.models import battles, rounds
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from pool_api_types.models import Share
-from src.modules.logger.logger import Logger
 from src.apis.contenders import send_termination_event_to_frontend
 
 

@@ -1,6 +1,6 @@
 asyncpg
 aiohttp
-chauff-cmn
+chauff-cmn>=0.1.0
 pytest
 pytest-asyncio
 testcontainers[postgres]
