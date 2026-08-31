@@ -9,7 +9,6 @@ from src.apis.contenders import send_termination_event_to_frontend
 class Referee:
 
     prisma: Prisma
-    log: Logger
     event_dispatcher: WebsocketBroadcaster
 
     async def get_current_round(self, battle_id: int):
@@ -80,7 +79,7 @@ class Referee:
             battle_id,
             block_height,
         )
-        self.log.info("Created round?", result)
+        self.log.info(f"Created round? {result}")
         return result == 1
 
     async def _get_rounds_to_close(self, battle: battles, block_height: int):
@@ -386,7 +385,7 @@ class Referee:
                 RETURNING contender_2_best_diff;
             """
         else:
-            self.log.warn("Received share from unknown address")
+            self.log.warning("Received share from unknown address")
             return
 
         rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)

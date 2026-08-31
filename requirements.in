@@ -1,0 +1,14 @@
+asyncpg
+aiohttp
+chauff-cmn
+pytest
+pytest-asyncio
+testcontainers[postgres]
+cachetools
+aiohttp_cors
+python_dotenv
+websockets
+pytest-cov
+zon
+prisma
+https://github.com/Les-Chauffagistes/pool-api-types/releases/download/v0.0.5/pool_api_types-0.1.0-py3-none-any.whl

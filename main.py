@@ -86,6 +86,7 @@ if __name__ == "__main__":
     app.add_routes(routes)
     paths = []
     for route in app.router.routes():
+        log.info(f"added cors on {route.method} {route.handler.__name__}")
         cors.add(route)
 
     asyncio.run(main())

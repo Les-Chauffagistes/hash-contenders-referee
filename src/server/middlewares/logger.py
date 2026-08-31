@@ -10,18 +10,6 @@ async def error_handler(request: Request, handler: Callable[[Request], Awaitable
     import init as hs_init
     log = hs_init.log
     method = request.method
-    match method:
-        case "GET":
-            log_request = log.get
-
-        case "POST":
-            log_request = log.post
-
-        case "DELETE":
-            log_request = log.delete
-
-        case _:
-            log_request = log.info
 
     status = None
     try:
@@ -39,9 +27,9 @@ async def error_handler(request: Request, handler: Callable[[Request], Awaitable
             return json_response({"error": "Not Found"}, status=404)
 
         else:
-            log.error("Unhandled exception while handling request", request.path)
+            log.exception(f"Unhandled exception while handling request {request.path}")
             status = 500
             return json_response({"error": "Internal Server Error"}, status=500)
 
     finally:
-        log_request(request.path, status if status is not None else "ERROR")
+        log.info(f"{method} {request.path} {status if status is not None else 'ERROR'}")
