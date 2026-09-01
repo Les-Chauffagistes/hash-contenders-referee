@@ -29,8 +29,9 @@ Toutes les 3 secondes :
 ### URL de connexion au pool
 ```
 {API_URL}/shares?address={contender_address}
+{API_URL}/shares?address={contender_address}&worker={contender_worker}   ← si un mineur précis est ciblé
 ```
-Les deux contenders d'une même battle ont chacun leur propre connexion WS.
+Construite par `build_shares_url()` (`src/apis/chauffagistes_pool/url.py`). Les deux contenders d'une même battle ont chacun leur propre connexion WS. Quand `battle.contender_N_worker` est renseigné (bataille "Mineur vs Mineur"), le paramètre `worker` est ajouté à l'URL : c'est le pool lui-même qui filtre alors les shares pour ne renvoyer que celles de ce mineur — le referee n'a rien à filtrer côté client. Sans worker ciblé (mode "Pool vs Pool", comportement historique), toutes les shares de l'adresse comptent.
 
 ---
 

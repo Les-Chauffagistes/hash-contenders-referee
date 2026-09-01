@@ -1,5 +1,6 @@
 from prisma import Prisma
 from src.apis.chauffagistes_pool.ws import WebsocketWrapper
+from src.apis.chauffagistes_pool.url import build_shares_url
 from init import API_URL, log, app, referee
 from asyncio import Task, create_task, sleep, gather
 from functools import partial
@@ -49,11 +50,11 @@ async def shares_listener():
                             f"{battle.contender_1_address} {battle.contender_2_address}"
                         )
                         ws1 = WebsocketWrapper(
-                            f"{API_URL}/shares?address={battle.contender_1_address}",
+                            build_shares_url(API_URL, battle.contender_1_address, battle.contender_1_worker),
                             partial(referee.on_share, battle),
                         )
                         ws2 = WebsocketWrapper(
-                            f"{API_URL}/shares?address={battle.contender_2_address}",
+                            build_shares_url(API_URL, battle.contender_2_address, battle.contender_2_worker),
                             partial(referee.on_share, battle),
                         )
                         t1 = create_task(ws1.continuous_listener())
