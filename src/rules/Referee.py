@@ -353,6 +353,30 @@ class Referee:
 
         return True
 
+    def _identify_contender(self, battle: battles, payload: Share) -> str | None:
+        """Identifie à quel contender appartient un share. L'adresse seule ne suffit
+        pas : deux contenders "Mineur vs Mineur" ciblant le même compte pool (cas
+        réel le plus courant) partagent la même adresse, distingués uniquement par
+        `worker`. Un contender sans worker ciblé (mode Pool vs Pool) accepte
+        n'importe quel worker de son adresse."""
+        matches_1 = payload.address == battle.contender_1_address and (
+            not battle.contender_1_worker or payload.worker == battle.contender_1_worker
+        )
+        matches_2 = payload.address == battle.contender_2_address and (
+            not battle.contender_2_worker or payload.worker == battle.contender_2_worker
+        )
+        if matches_1 and matches_2:
+            self.log.warning(
+                f"[BATTLE {battle.id}] Share ambigu (adresse+worker matchent les deux "
+                f"contenders) : address={payload.address!r} worker={payload.worker!r}"
+            )
+            return None
+        if matches_1:
+            return "contender_1"
+        if matches_2:
+            return "contender_2"
+        return None
+
     async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
         """Identifie le contender et met à jour le best diff si supérieur."""
         if not payload.result or payload.errn != 0:
@@ -363,8 +387,8 @@ class Referee:
             )
             return
 
-        if payload.address == battle.contender_1_address:
-            contender = "contender_1"
+        contender = self._identify_contender(battle, payload)
+        if contender == "contender_1":
             query = """
                 UPDATE rounds
                 SET contender_1_best_diff = $2
@@ -373,8 +397,7 @@ class Referee:
                 AND contender_1_best_diff < $2
                 RETURNING contender_1_best_diff;
             """
-        elif payload.address == battle.contender_2_address:
-            contender = "contender_2"
+        elif contender == "contender_2":
             query = """
                 UPDATE rounds
                 SET contender_2_best_diff = $2
