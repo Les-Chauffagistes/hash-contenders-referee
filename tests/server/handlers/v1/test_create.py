@@ -37,8 +37,9 @@ def test_validator_keeps_empty_worker_as_empty_string():
     """`zon.optional()` n'omet que les valeurs `None`/absentes du payload, pas les
     chaînes vides : celles-ci passent intactes. Sans incidence en pratique — le
     formulaire front n'envoie jamais de chaîne vide (il omet le champ), et le reste
-    de la chaîne (`build_shares_url`, `getBattleMode`) traite déjà `""` comme `None`
-    (falsy) — mais documenté ici pour ne pas supposer le contraire par erreur."""
+    de la chaîne (`Referee._identify_contender`, `getBattleMode`) traite déjà `""`
+    comme `None` (falsy) — mais documenté ici pour ne pas supposer le contraire par
+    erreur."""
     result = validator.validate(_valid_payload(contender_1_worker=""))
     assert result["contender_1_worker"] == ""
 

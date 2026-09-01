@@ -1,6 +1,5 @@
 from prisma import Prisma
 from src.apis.chauffagistes_pool.ws import WebsocketWrapper
-from src.apis.chauffagistes_pool.url import build_shares_url
 from init import API_URL, log, app, referee
 from asyncio import Task, create_task, sleep, gather
 from functools import partial
@@ -8,25 +7,25 @@ from functools import partial
 prisma: Prisma = app["prisma"]
 
 
-async def _stop_battle_connections(
-    connections: tuple[WebsocketWrapper, WebsocketWrapper, Task, Task],
-):
-    ws1, ws2, t1, t2 = connections
-    stop_results = await gather(ws1.stop(), ws2.stop(), return_exceptions=True)
+async def _stop_battle_connections(connections: list[tuple[WebsocketWrapper, Task]]):
+    stop_results = await gather(
+        *(ws.stop() for ws, _ in connections), return_exceptions=True
+    )
     for result in stop_results:
         if isinstance(result, BaseException):
             log.error(f"Error while stopping websocket: {result}")
 
-    t1.cancel()
-    t2.cancel()
-    await gather(t1, t2, return_exceptions=True)
+    tasks = [t for _, t in connections]
+    for t in tasks:
+        t.cancel()
+    await gather(*tasks, return_exceptions=True)
 
 
 async def shares_listener():
     log.info("Starting match loop...")
 
-    # Stocker les 2 ws et leurs tasks pour chaque battle
-    active: dict[int, tuple[WebsocketWrapper, WebsocketWrapper, Task, Task]] = {}
+    # Stocker les ws (et leurs tasks) ouverts pour chaque battle
+    active: dict[int, list[tuple[WebsocketWrapper, Task]]] = {}
     assert API_URL is not None
 
     try:
@@ -49,17 +48,30 @@ async def shares_listener():
                             f"Added ws for battle {battle.id} "
                             f"{battle.contender_1_address} {battle.contender_2_address}"
                         )
-                        ws1 = WebsocketWrapper(
-                            build_shares_url(API_URL, battle.contender_1_address, battle.contender_1_worker),
-                            partial(referee.on_share, battle),
+                        # Toujours souscrire à l'adresse entière, sans filtrer par worker
+                        # côté requête : le filtre `&worker=` du pool s'est avéré peu
+                        # fiable en pratique (sensible à la casse alors que le champ
+                        # `worker` renvoyé dans les shares ne l'est pas forcément,
+                        # provoquant un flux vide et silencieux côté pool). Le
+                        # rapprochement par worker est déjà fait, de façon fiable et
+                        # insensible à la casse, par `Referee._identify_contender`.
+                        #
+                        # Une seule connexion par adresse *distincte* : en mode Mineur
+                        # vs Mineur sur un même compte pool, les deux contenders
+                        # partagent la même adresse. Ouvrir deux connexions identiques
+                        # ferait recevoir (et traiter) chaque share deux fois.
+                        addresses = dict.fromkeys(
+                            (battle.contender_1_address, battle.contender_2_address)
                         )
-                        ws2 = WebsocketWrapper(
-                            build_shares_url(API_URL, battle.contender_2_address, battle.contender_2_worker),
-                            partial(referee.on_share, battle),
-                        )
-                        t1 = create_task(ws1.continuous_listener())
-                        t2 = create_task(ws2.continuous_listener())
-                        active[battle.id] = ws1, ws2, t1, t2
+                        connections: list[tuple[WebsocketWrapper, Task]] = []
+                        for address in addresses:
+                            ws = WebsocketWrapper(
+                                f"{API_URL}/shares?address={address}",
+                                partial(referee.on_share, battle),
+                            )
+                            task = create_task(ws.continuous_listener())
+                            connections.append((ws, task))
+                        active[battle.id] = connections
 
             except Exception:
                 log.exception("Error in match loop")
