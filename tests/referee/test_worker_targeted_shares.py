@@ -113,3 +113,29 @@ async def test_share_ambiguous_between_whole_pool_and_targeted_miner_is_dropped(
     assert round_row.contender_1_best_diff == 0
     assert round_row.contender_2_best_diff == 0
     referee.event_dispatcher.new_best_share.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_worker_matching_is_case_insensitive(prisma_tx: Prisma, referee: Referee):
+    """Bug observé en staging : le mineur configure un worker en casse mixte
+    ("Fulcran") mais le pool renvoie parfois une casse différente ("fulcran") dans
+    le share. Une comparaison sensible à la casse faisait échouer
+    `_identify_contender` pour les deux contenders simultanément (même compte pool),
+    bloquant toute progression de la bataille."""
+    battle = await _make_battle(
+        prisma_tx, contender_1_worker="Fulcran", contender_2_worker="Hugo"
+    )
+    referee.event_dispatcher = AsyncMock()
+
+    share_from_fulcran = make_share("shared_address", block_height=400, worker="fulcran", diff=50.0)
+    await referee.on_share(battle, share_from_fulcran)
+
+    share_from_hugo = make_share("shared_address", block_height=400, worker="HUGO", diff=70.0)
+    await referee.on_share(battle, share_from_hugo)
+
+    round_row = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
+    )
+    assert round_row is not None
+    assert round_row.contender_1_best_diff == 50
+    assert round_row.contender_2_best_diff == 70

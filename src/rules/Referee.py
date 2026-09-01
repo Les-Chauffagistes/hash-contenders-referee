@@ -359,11 +359,18 @@ class Referee:
         réel le plus courant) partagent la même adresse, distingués uniquement par
         `worker`. Un contender sans worker ciblé (mode Pool vs Pool) accepte
         n'importe quel worker de son adresse."""
-        matches_1 = payload.address == battle.contender_1_address and (
-            not battle.contender_1_worker or payload.worker == battle.contender_1_worker
+        def worker_matches(configured: str | None) -> bool:
+            # Les workers ASIC/pool sont couramment re-normalisés en casse par le
+            # firmware ou le pool (ex: "Fulcran" saisi côté UI vs "fulcran" renvoyé
+            # dans le share) : comparaison insensible à la casse pour ne pas dépendre
+            # de cette normalisation.
+            return not configured or payload.worker.casefold() == configured.casefold()
+
+        matches_1 = payload.address == battle.contender_1_address and worker_matches(
+            battle.contender_1_worker
         )
-        matches_2 = payload.address == battle.contender_2_address and (
-            not battle.contender_2_worker or payload.worker == battle.contender_2_worker
+        matches_2 = payload.address == battle.contender_2_address and worker_matches(
+            battle.contender_2_worker
         )
         if matches_1 and matches_2:
             self.log.warning(
@@ -388,6 +395,10 @@ class Referee:
             return
 
         contender = self._identify_contender(battle, payload)
+        self.log.debug(
+            f"[BATTLE {battle.id}] Share address={payload.address!r} worker={payload.worker!r} "
+            f"identifié comme {contender!r}"
+        )
         if contender == "contender_1":
             query = """
                 UPDATE rounds
@@ -407,7 +418,12 @@ class Referee:
                 RETURNING contender_2_best_diff;
             """
         else:
-            self.log.warning("Received share from unknown address")
+            self.log.warning(
+                f"[BATTLE {battle.id}] Share ignoré, ne correspond à aucun contender : "
+                f"reçu address={payload.address!r} worker={payload.worker!r} | "
+                f"attendu contender_1 address={battle.contender_1_address!r} worker={battle.contender_1_worker!r}, "
+                f"contender_2 address={battle.contender_2_address!r} worker={battle.contender_2_worker!r}"
+            )
             return
 
         rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)
