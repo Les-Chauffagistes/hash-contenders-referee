@@ -6,9 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv(".env")
 
-from init import log, routes, app, log, event_dispatcher
+from init import routes, app, log, event_dispatcher
 from src.server.cors import cors
-from os import getenv
 from aiohttp import web
 from src.rules.Referee import Referee
 from state import client_webosckets
