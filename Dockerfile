@@ -39,6 +39,6 @@ CMD ["sh", "-c", "\
   export DB_PASSWORD=$(cat /run/secrets/db_password) && \
   export DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-}:5432/${DB_NAME} && \
   export API_TOKEN=$(cat /run/secrets/api_token) && \
-  export JWT_SECRET=$(cat /run/secret/jwt_secret) && \
+  export JWT_SECRET=$(cat /run/secrets/jwt_secret) && \
   until prisma migrate deploy; do echo 'DB pas prête, retry...'; sleep 2; done && \
   exec python main.py"]
