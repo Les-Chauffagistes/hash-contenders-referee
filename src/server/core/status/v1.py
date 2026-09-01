@@ -13,6 +13,7 @@ class ContenderInfo(TypedDict):
 
 
 class BattleResponse(TypedDict):
+    owner_user_id: int
     battle_id: int
     rounds: int
     contenders_base_pv: int
@@ -31,11 +32,11 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
         include={"all_rounds": True} if include_hits else None,
     )
     if not battle:
-        log.warn("404")
+        log.warning("404")
         raise Exception("Battle not found")
 
     contender_1_pv, contender_2_pv = await referee.compute_pv(battle)
-    log.info(contender_1_pv, contender_2_pv)
+    log.info(f"{contender_1_pv} {contender_2_pv}")
     current_round_block_height = await referee.get_current_round(battle.id)
     current_round_number = await referee.get_current_round_number(battle.id)
     if current_round_block_height:
@@ -74,6 +75,7 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
         hits: list[rounds] = []
 
     return BattleResponse(
+        owner_user_id = battle.owner_user_id,
         battle_id=battle.id,
         rounds=battle.rounds,
         contenders_base_pv=battle.contenders_pv,

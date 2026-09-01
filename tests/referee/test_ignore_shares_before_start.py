@@ -36,6 +36,7 @@ async def test_ignore_share_before_start_height(prisma_tx: Prisma, referee: Refe
         data={
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -66,6 +67,7 @@ async def test_ignore_multiple_shares_before_start_height(
         data={
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -94,6 +96,7 @@ async def test_accept_share_at_start_height(prisma_tx: Prisma, referee: Referee)
         data={
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -121,6 +124,7 @@ async def test_accept_share_after_start_height(prisma_tx: Prisma, referee: Refer
         data={
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -150,6 +154,7 @@ async def test_ignore_before_then_accept_after_start_height(
         data={
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",
@@ -189,6 +194,7 @@ async def test_no_best_diff_update_before_start_height(
         data={
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1_address",
             "contender_1_name": "Contender 1",
             "contender_2_address": "bc2_address",

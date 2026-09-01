@@ -7,7 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=secret,id=pipindex \
+    PIP_EXTRA_INDEX_URL="$(cat /run/secrets/pipindex 2>/dev/null || true)" \
+    pip install --no-cache-dir --require-hashes --only-binary :all: --trusted-host 10.10.0.3 -r requirements.txt
 
 COPY prisma ./prisma
 RUN prisma generate
@@ -37,5 +39,6 @@ CMD ["sh", "-c", "\
   export DB_PASSWORD=$(cat /run/secrets/db_password) && \
   export DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-}:5432/${DB_NAME} && \
   export API_TOKEN=$(cat /run/secrets/api_token) && \
+  export JWT_SECRET=$(cat /run/secrets/jwt_secret) && \
   until prisma migrate deploy; do echo 'DB pas prête, retry...'; sleep 2; done && \
-  python main.py"]
+  exec python main.py"]

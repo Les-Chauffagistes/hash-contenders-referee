@@ -2,11 +2,11 @@ from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from src.rules.Referee import Referee
 from src.database.prisma import close_prisma, init_prisma
 from src.server.middlewares.logger import error_handler
-from src.modules import logger
+from chauff_cmn.logging import configure, logger as log
 from aiohttp.web import Application, RouteTableDef
 from os import getenv
 
-log = logger.Logger()
+configure(service="hash-contenders-referee", level=getenv("LOG_LEVEL", "DEBUG"))
 
 app = Application(
     middlewares=(error_handler,)
@@ -21,10 +21,10 @@ event_dispatcher = WebsocketBroadcaster()
 
 API_URL = getenv("API_URL")
 if not API_URL:
-    log.crit("API_URL not set")
+    log.critical("API_URL not set")
     exit(1)
 
 API_TOKEN = getenv("API_TOKEN")
 if not API_TOKEN:
-    log.crit("API_TOKEN not set")
+    log.critical("API_TOKEN not set")
     exit(1)

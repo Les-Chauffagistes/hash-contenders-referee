@@ -33,7 +33,7 @@ class WebsocketWrapper:
         self.status = Status.DISCONNECTED
         if not self._running:
             return
-        log.warn(f"{reason}\n.{e}\nReconnexion dans 5 secondes...")
+        log.warning(f"{reason}\n.{e}\nReconnexion dans 5 secondes...")
         await asyncio.sleep(5)
 
     async def hanlde_message(self, message: websockets.Data):
@@ -44,24 +44,28 @@ class WebsocketWrapper:
 
             elif data.get("type") == "share":
                 parsed_data = Share(**data["share"])
-                log.debug(from_number_to_string(int(parsed_data.sdiff)), "from", parsed_data.worker, "at", datetime.fromtimestamp(parsed_data.ts).strftime("%H:%M:%S"), "at block", int(parsed_data.round, 16))
+                log.debug(
+                    f"{from_number_to_string(int(parsed_data.sdiff))} from {parsed_data.worker} "
+                    f"at {datetime.fromtimestamp(parsed_data.ts).strftime('%H:%M:%S')} "
+                    f"at block {int(parsed_data.round, 16)}"
+                )
 
             else:
-                log.warn("Unknown message type", data)
+                log.warning(f"Unknown message type {data}")
                 return
 
         except json.JSONDecodeError as e:
-            log.warn("Invalid JSON", e)
+            log.warning(f"Invalid JSON {e}")
             raise
         except ValueError as e:
-            log.warn("Invalid data", e)
+            log.warning(f"Invalid data {e}")
             raise
 
         try:
             await self.on_message(parsed_data)
 
         except Exception as e:
-            log.error(f"Error while processing message: {e}")
+            log.exception(f"Error while processing message: {e}")
             raise
 
     async def _message_worker(self):
@@ -72,7 +76,7 @@ class WebsocketWrapper:
                 try:
                     await self.hanlde_message(message)
                 except Exception:
-                    log.error()
+                    log.exception("")
                 finally:
                     self._queue.task_done()
             except asyncio.TimeoutError:
@@ -80,33 +84,36 @@ class WebsocketWrapper:
 
     async def continuous_listener(self):
         worker_task = asyncio.create_task(self._message_worker())
-        while self._running:
-            reason = "Connexion fermée"
-            error = None
-            try:
-                self.status = Status.CONNECTING
-                async with websockets.connect(
-                    self.uri,
-                    additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
-                    max_size=10 * 1024 * 1024,  # 10MB pour les gros messages
-                ) as ws:
-                    self._ws = ws
-                    self.status = Status.CONNECTED
-                    log.info("Connected to", self.uri)
+        try:
+            while self._running:
+                reason = "Connexion fermée"
+                error = None
+                try:
+                    self.status = Status.CONNECTING
+                    async with websockets.connect(
+                        self.uri,
+                        additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
+                        max_size=10 * 1024 * 1024,  # 10MB pour les gros messages
+                    ) as ws:
+                        self._ws = ws
+                        self.status = Status.CONNECTED
+                        log.info(f"Connected to {self.uri}")
 
-                    async for message in ws:
-                        await self._queue.put(message)
+                        async for message in ws:
+                            await self._queue.put(message)
 
-            except websockets.WebSocketException as e:
-                reason, error = "Déconnecté", e
-            except OSError as e:
-                reason, error = "Connexion refusée", e
-            except Exception as e:
-                reason, error = str(e), e
-            finally:
-                self._ws = None
-                await self._disconect_and_reconnect(reason, error)
-
-        worker_task.cancel()
-        self.status = Status.DISCONNECTED
-        log.info("Listener stopped for", self.uri)
+                except websockets.WebSocketException as e:
+                    reason, error = "Déconnecté", e
+                except OSError as e:
+                    reason, error = "Connexion refusée", e
+                except Exception as e:
+                    reason, error = str(e), e
+                finally:
+                    self._ws = None
+                    await self._disconect_and_reconnect(reason, error)
+        finally:
+            self._running = False
+            worker_task.cancel()
+            await asyncio.gather(worker_task, return_exceptions=True)
+            self.status = Status.DISCONNECTED
+            log.info(f"Listener stopped for {self.uri}")

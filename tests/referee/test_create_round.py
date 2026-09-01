@@ -8,6 +8,7 @@ async def test_create_needed_round(prisma_tx: Prisma, referee: Referee):
         data = {
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1",
             "contender_1_name": "bc1",
             "contender_2_address": "bc2",
@@ -33,6 +34,7 @@ async def test_create_not_needed_round(prisma_tx: Prisma, referee: Referee):
         data = {
             "id": 1,
             "rounds": 21,
+            "owner_user_id": 1,
             "contender_1_address": "bc1",
             "contender_1_name": "bc1",
             "contender_2_address": "bc2",
