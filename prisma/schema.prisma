@@ -18,6 +18,8 @@ model battles {
   contender_2_address    String
   contender_1_name       String
   contender_2_name       String
+  contender_1_worker     String?
+  contender_2_worker     String?
   is_finished            Boolean  @default(false)
   are_addresses_privates Boolean  @default(false)
   all_rounds             rounds[]

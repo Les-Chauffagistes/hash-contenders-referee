@@ -2,7 +2,8 @@ from aiohttp.web_request import Request
 from aiohttp import web
 from init import app
 from .base import routes
-from ...middlewares.get_user import get_user_or_raise
+from src.server.middlewares.get_user import get_user_or_raise
+from src.apis.contenders import send_cancellation_event_to_frontend
 
 
 @routes.delete("/battle/{id}")
@@ -22,5 +23,11 @@ async def delete_battle(request: Request):
         return web.json_response({"error": "Unauthorized"}, status=403)
 
     await prisma.battles.delete(where={"id": int(battle_id)})
+
+    # Fire-and-forget : envoyé seulement une fois la suppression committée en
+    # base, pour que Next.js (hash-contenders) annule et rembourse les paris
+    # associés. Un sweep périodique côté Next rattrape les notifications
+    # manquées.
+    send_cancellation_event_to_frontend(battle_id)
 
     return web.json_response({"message": "Battle deleted successfully"}, status=204)

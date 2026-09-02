@@ -13,8 +13,10 @@ from prisma import types
 validator = zon.record({
     "contender_1_address": zon.string(),
     "contender_1_name": zon.string(),
+    "contender_1_worker": zon.string().optional(),
     "contender_2_address": zon.string(),
     "contender_2_name": zon.string(),
+    "contender_2_worker": zon.string().optional(),
     "contenders_pv": zon.number().int(),
     "rounds": zon.number().int(),
     "start_height": zon.number().int(),

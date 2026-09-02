@@ -21,6 +21,8 @@ Représente une compétition entre deux mineurs.
 | `contender_2_address` | `String` | Adresse pool du contender 2 |
 | `contender_1_name` | `String` | Nom affiché du contender 1 |
 | `contender_2_name` | `String` | Nom affiché du contender 2 |
+| `contender_1_worker` | `String?` | Mineur ciblé chez contender 1 (`worker` du pool). `NULL` = toute la pool compte (mode "Pool vs Pool") |
+| `contender_2_worker` | `String?` | Mineur ciblé chez contender 2. `NULL` = toute la pool compte |
 | `is_finished` | `Boolean` | `true` quand la bataille est terminée |
 | `are_addresses_privates` | `Boolean` | Si `true`, les adresses ne sont pas exposées dans l'API |
 

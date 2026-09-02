@@ -14,14 +14,17 @@ Crée une nouvelle bataille.
 {
   "contender_1_address": "string",
   "contender_1_name": "string",
+  "contender_1_worker": "string",
   "contender_2_address": "string",
   "contender_2_name": "string",
+  "contender_2_worker": "string",
   "contenders_pv": 10,
   "rounds": 5,
   "start_height": 123456,
   "are_addresses_privates": false
 }
 ```
+`contender_1_worker` / `contender_2_worker` sont optionnels. Absents (ou vides) → bataille "Pool vs Pool" (comportement historique, toute la pool de l'adresse compte). Renseignés → bataille "Mineur vs Mineur", seules les shares de ce mineur précis comptent pour ce contender.
 **Réponse :** objet `battles` formaté (BigInt sérialisés en string).  
 **Erreurs :** `400` si JSON invalide ou champs manquants.
 
@@ -68,13 +71,14 @@ Retourne l'état détaillé d'une bataille.
       "address": "...",
       "pv": 8,
       "name": "Contender 1",
+      "worker": null,
       "current_round_best_diff": 42000
     },
     { "..." }
   ]
 }
 ```
-> Si `are_addresses_privates = true`, le champ `address` est omis de `contender_info`.
+> Si `are_addresses_privates = true`, le champ `address` est omis de `contender_info`. `worker` reste toujours présent (non `null` uniquement pour les batailles "Mineur vs Mineur") : ce n'est pas la donnée que `are_addresses_privates` masque.
 
 Fichier : `src/server/handlers/v1/status.py` → `src/server/core/status/v1.py`
 

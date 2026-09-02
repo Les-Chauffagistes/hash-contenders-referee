@@ -59,3 +59,33 @@ def send_termination_event_to_frontend(battle_id: int | str) -> None:
     task = asyncio.create_task(_post_termination_event(battle_id))
     _pending_tasks.add(task)
     task.add_done_callback(_pending_tasks.discard)
+
+
+async def _post_cancellation_event(battle_id: int | str) -> None:
+    """Effectue réellement l'appel HTTP. Toute erreur (réseau, timeout, statut HTTP
+    en erreur) est avalée ici : ce chemin est volontairement non fiable, un sweep
+    périodique côté Next rattrape les notifications manquées."""
+    session = Connector.get_session()
+    try:
+        async with session.post(f"/api/internal/battles/{battle_id}/cancel"):
+            pass
+    except Exception as exc:  # noqa: BLE001 - fire-and-forget, ne doit jamais remonter
+        log.debug(
+            f"[BATTLE {battle_id}] Notification de suppression au frontend ignorée",
+            exc,
+        )
+
+
+def send_cancellation_event_to_frontend(battle_id: int | str) -> None:
+    """Notifie Next.js (hash-contenders) qu'une bataille vient d'être supprimée, pour
+    déclencher l'annulation et le remboursement des paris associés.
+
+    À appeler uniquement APRÈS que `battles.{id}` a été supprimée en base (le
+    référee est seul propriétaire de cette table, Next n'a aucun autre moyen
+    de savoir que la bataille a disparu). Mêmes garanties fire-and-forget que
+    `send_termination_event_to_frontend` : pas de retry, timeout court,
+    réponse ignorée.
+    """
+    task = asyncio.create_task(_post_cancellation_event(battle_id))
+    _pending_tasks.add(task)
+    task.add_done_callback(_pending_tasks.discard)

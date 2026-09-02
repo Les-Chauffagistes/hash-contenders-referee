@@ -14,11 +14,13 @@ Coroutine principale lancée dans `main.py` via `create_task`.
 Toutes les 3 secondes :
   1. Requête DB : battles WHERE is_finished = False
   2. Pour chaque battle active sans WS ouvert :
-       → ouvre 2 WebsocketWrapper (un par contender)
-       → lance 2 tâches asyncio (continuous_listener)
+       → ouvre 1 WebsocketWrapper par adresse *distincte* parmi les deux contenders
+         (une seule connexion si les deux contenders partagent la même adresse —
+         cas courant en "Mineur vs Mineur" sur un même compte pool)
+       → lance une tâche asyncio par connexion (continuous_listener)
        → stocke dans dict active[battle_id]
   3. Pour chaque battle devenue terminée (is_finished = True) :
-       → ws1.stop() + ws2.stop()
+       → stop() de chaque connexion
        → annule les tâches asyncio
        → retire de active
   4. sleep(3)
@@ -30,7 +32,7 @@ Toutes les 3 secondes :
 ```
 {API_URL}/shares?address={contender_address}
 ```
-Les deux contenders d'une même battle ont chacun leur propre connexion WS.
+Toujours filtrée par `address` uniquement, jamais par `worker` : le paramètre `&worker=` du pool s'est avéré peu fiable en pratique (sensible à la casse côté filtre, alors que le champ `worker` renvoyé dans chaque share ne l'est pas forcément — un mineur nommé `Fulcran` en base mais `fulcran` côté pool ne recevait alors aucune share, silencieusement). Pour une bataille "Mineur vs Mineur" (`battle.contender_N_worker` renseigné), le referee souscrit à l'adresse entière et laisse `Referee._identify_contender()` faire le rapprochement côté client, de façon fiable et insensible à la casse — voir [Referee](./referee.md).
 
 ---
 

@@ -9,6 +9,7 @@ class ContenderInfo(TypedDict):
     address: NotRequired[str]
     pv: int
     name: str
+    worker: NotRequired[str | None]
     current_round_best_diff: int
 
 
@@ -52,12 +53,14 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
             "address": battle.contender_1_address,
             "pv": contender_1_pv,
             "name": battle.contender_1_name,
+            "worker": battle.contender_1_worker,
             "current_round_best_diff": best_diff1
         },
         {
             "address": battle.contender_2_address,
             "pv": contender_2_pv,
             "name": battle.contender_2_name,
+            "worker": battle.contender_2_worker,
             "current_round_best_diff": best_diff2
         },
     ]
