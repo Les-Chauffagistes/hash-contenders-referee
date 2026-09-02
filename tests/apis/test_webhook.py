@@ -70,3 +70,36 @@ async def test_send_termination_event_never_raises_on_http_failure(monkeypatch):
 
     results = await asyncio.gather(*created_tasks, return_exceptions=True)
     assert results == [None]
+
+
+def test_send_cancellation_event_is_non_blocking():
+    """Même garantie fire-and-forget que la notification de fin de bataille."""
+    assert not asyncio.iscoroutinefunction(webhook.send_cancellation_event_to_frontend)
+
+
+@pytest.mark.asyncio
+async def test_send_cancellation_event_posts_to_cancel_endpoint(monkeypatch):
+    session = MagicMock()
+    session.post = MagicMock(return_value=_FakeResponseCtx())
+    monkeypatch.setattr(webhook.Connector, "get_session", classmethod(lambda cls: session))
+    created_tasks = _track_created_tasks(monkeypatch)
+
+    webhook.send_cancellation_event_to_frontend(42)
+    await asyncio.gather(*created_tasks)
+
+    session.post.assert_called_once_with("/api/internal/battles/42/cancel")
+
+
+@pytest.mark.asyncio
+async def test_send_cancellation_event_never_raises_on_http_failure(monkeypatch):
+    """Même garantie fire-and-forget que la notification de fin de bataille :
+    une notification perdue est rattrapée par le sweep périodique côté Next."""
+    session = MagicMock()
+    session.post = MagicMock(return_value=_FakeResponseCtx(exc=TimeoutError("boom")))
+    monkeypatch.setattr(webhook.Connector, "get_session", classmethod(lambda cls: session))
+    created_tasks = _track_created_tasks(monkeypatch)
+
+    webhook.send_cancellation_event_to_frontend(7)
+
+    results = await asyncio.gather(*created_tasks, return_exceptions=True)
+    assert results == [None]
