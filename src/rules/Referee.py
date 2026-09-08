@@ -1,7 +1,8 @@
 from prisma import Prisma
-from prisma.models import battles, rounds
+from prisma.models import battles
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
-from pool_api_types.models import Share
+from chauff_cmn.models import Share
+from chauff_cmn.logging import logger as log
 from src.apis.contenders import send_termination_event_to_frontend
 
 
@@ -78,7 +79,7 @@ class Referee:
             battle_id,
             block_height,
         )
-        self.log.info(f"Created round? {result}")
+        log.info(f"Created round? {result}")
         return result == 1
 
     async def _get_rounds_to_close(self, battle: battles, block_height: int):
@@ -174,7 +175,7 @@ class Referee:
         )
 
     async def on_share(self, battle: battles, payload: Share):
-        # self.log.debug(
+        # log.debug(
         #     f"[BATTLE {battle.id}] Share reçu | worker={payload.worker} diff={payload.diff} "
         #     f"round={payload.round} replay={replay}"
         # )
@@ -182,48 +183,48 @@ class Referee:
 
         block_height = int(payload.round, 16)
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Block height décodé = {block_height}"
         )
 
         # Ignorer les shares si la bataille est terminée
         if battle.is_finished:
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : battle déjà terminée"
             )
             return
 
         # Ignorer les shares avant le début de la bataille
         if block_height < battle.start_height:
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : block {block_height} "
                 f"< start_height {battle.start_height}"
             )
             return
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Traitement du share pour block {block_height}"
         )
 
         if await self._finalize_and_broadcast(battle, block_height):
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] KO détecté après fermeture de round"
             )
             return
 
         # Re-vérifier après les awaits : l'autre task a pu clôturer la bataille
         if battle.is_finished:
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Battle terminée pendant le traitement"
             )
             return
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Vérification / création du round pour block {block_height}"
         )
 
         if not await self._ensure_round_exists(battle, block_height, payload):
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : round non créé (max rounds atteint)"
             )
             last_round = await self.get_current_round(battle.id)
@@ -249,13 +250,13 @@ class Referee:
                     await self.event_dispatcher.client_websockets.close(battle.id)
             return
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Round OK, tentative mise à jour best share"
         )
 
         await self._update_best_share(battle, block_height, payload)
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Fin traitement share diff={payload.sdiff}"
         )
 
@@ -340,7 +341,7 @@ class Referee:
         if existing_round is None:
             current_round_count = await self.get_current_round_number(battle.id)
             if current_round_count >= battle.rounds:
-                self.log.debug(
+                log.debug(
                     f"Ignoring share for battle {battle.id} at block {block_height}, "
                     f"battle has reached max rounds ({battle.rounds})"
                 )
@@ -373,7 +374,7 @@ class Referee:
             battle.contender_2_worker
         )
         if matches_1 and matches_2:
-            self.log.warning(
+            log.warning(
                 f"[BATTLE {battle.id}] Share ambigu (adresse+worker matchent les deux "
                 f"contenders) : address={payload.address!r} worker={payload.worker!r}"
             )
@@ -388,14 +389,14 @@ class Referee:
         """Identifie le contender et met à jour le best diff si supérieur."""
         if not payload.result or payload.errn != 0:
             # Share rejetée côté pool : ne doit jamais pouvoir décider de l'arbitrage.
-            self.log.debug(
+            log.debug(
                 f"Ignoring invalid share (result={payload.result}, errn={payload.errn}) "
                 f"from {payload.address} at block {block_height}"
             )
             return
 
         contender = self._identify_contender(battle, payload)
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Share address={payload.address!r} worker={payload.worker!r} "
             f"identifié comme {contender!r}"
         )
@@ -418,7 +419,7 @@ class Referee:
                 RETURNING contender_2_best_diff;
             """
         else:
-            self.log.warning(
+            log.warning(
                 f"[BATTLE {battle.id}] Share ignoré, ne correspond à aucun contender : "
                 f"reçu address={payload.address!r} worker={payload.worker!r} | "
                 f"attendu contender_1 address={battle.contender_1_address!r} worker={battle.contender_1_worker!r}, "

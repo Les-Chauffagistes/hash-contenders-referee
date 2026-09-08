@@ -3,7 +3,8 @@ from src.server.core.status.v1 import get_battle_hits, get_battle_status
 from .base import routes
 from aiohttp.web_request import Request
 from aiohttp.web import json_response
-from init import log
+from chauff_cmn.logging import logger as log
+
 
 log.debug("loading handlers")
 

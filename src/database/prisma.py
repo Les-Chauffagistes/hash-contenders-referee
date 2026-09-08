@@ -1,8 +1,9 @@
 from prisma import Prisma
 from aiohttp import web
+from chauff_cmn.logging import logger as log
+
 
 async def init_prisma(app: web.Application):
-    from init import log
     log.info("Prisma ready")
     prisma = Prisma()
     await prisma.connect()

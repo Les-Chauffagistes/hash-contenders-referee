@@ -1,5 +1,6 @@
 from aiohttp.web import Application, RouteTableDef
-from init import log
+from chauff_cmn.logging import logger as log
+
 
 log.debug("defining subapp and route table")
 

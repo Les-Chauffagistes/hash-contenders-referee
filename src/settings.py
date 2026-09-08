@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     jwt_secret: str
     server_port: int
     frontend_url: str
+    pool_api_url: str
 
     model_config = {"env_file": ".env", "extra": "allow"}
 

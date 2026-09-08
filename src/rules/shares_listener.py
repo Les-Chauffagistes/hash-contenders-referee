@@ -1,8 +1,11 @@
 from prisma import Prisma
 from src.apis.chauffagistes_pool.ws import WebsocketWrapper
-from init import API_URL, log, app, referee
+from init import app, referee, hashrate_fetch
 from asyncio import Task, create_task, sleep, gather
 from functools import partial
+from chauff_cmn.logging import logger as log
+from src.settings import settings
+
 
 prisma: Prisma = app["prisma"]
 
@@ -21,12 +24,17 @@ async def _stop_battle_connections(connections: list[tuple[WebsocketWrapper, Tas
     await gather(*tasks, return_exceptions=True)
 
 
+async def _release_hashrate_polling(battle_id: int, addresses: set[str]):
+    for address in addresses:
+        await hashrate_fetch.release(address, battle_id)
+
+
 async def shares_listener():
     log.info("Starting match loop...")
 
-    # Stocker les ws (et leurs tasks) ouverts pour chaque battle
-    active: dict[int, list[tuple[WebsocketWrapper, Task]]] = {}
-    assert API_URL is not None
+    # Stocker les ws (et leurs tasks), et les adresses associées, pour chaque battle
+    active: dict[int, tuple[set[str], list[tuple[WebsocketWrapper, Task]]]] = {}
+    assert settings.api_url is not None
 
     try:
         while True:
@@ -34,12 +42,14 @@ async def shares_listener():
                 battles = await prisma.battles.find_many(where={"is_finished": False})
                 active_ids = {b.id for b in battles}
 
-                # Couper les ws des batailles terminées
+                # Couper les ws des batailles terminées, et libérer le polling de
+                # hashrate des adresses que cette battle était la seule à retenir.
                 finished_ids = set(active.keys()) - active_ids
                 for battle_id in finished_ids:
-                    connections = active.pop(battle_id)
+                    addresses, connections = active.pop(battle_id)
                     log.info(f"Stopping ws for finished battle {battle_id}")
                     await _stop_battle_connections(connections)
+                    await _release_hashrate_polling(battle_id, addresses)
 
                 # Démarrer les ws des nouvelles batailles
                 for battle in battles:
@@ -63,15 +73,17 @@ async def shares_listener():
                         addresses = dict.fromkeys(
                             (battle.contender_1_address, battle.contender_2_address)
                         )
+                        for address in addresses:
+                            hashrate_fetch.acquire(address, battle.id)
                         connections: list[tuple[WebsocketWrapper, Task]] = []
                         for address in addresses:
                             ws = WebsocketWrapper(
-                                f"{API_URL}/shares?address={address}",
+                                f"{settings.api_url}/shares?address={address}",
                                 partial(referee.on_share, battle),
                             )
                             task = create_task(ws.continuous_listener())
                             connections.append((ws, task))
-                        active[battle.id] = connections
+                        active[battle.id] = (set(addresses), connections)
 
             except Exception:
                 log.exception("Error in match loop")
@@ -80,7 +92,16 @@ async def shares_listener():
     finally:
         log.info("Stopping match loop...")
         await gather(
-            *(_stop_battle_connections(connections) for connections in active.values())
+            *(
+                _stop_battle_connections(connections)
+                for _, connections in active.values()
+            )
+        )
+        await gather(
+            *(
+                _release_hashrate_polling(battle_id, addresses)
+                for battle_id, (addresses, _) in active.items()
+            )
         )
         active.clear()
         log.info("Match loop stopped")

@@ -62,7 +62,7 @@ _message_worker()
 ### Découpage receive / process
 - Le **receive loop** pousse les messages dans une `asyncio.Queue`
 - Le **worker** les traite séquentiellement, découplant la réception du traitement
-- Évite que `hanlde_message` (qui appelle `Referee.on_share`, donc des requêtes DB) ne bloque la réception de nouveaux messages
+- Évite que `handle_message` (qui appelle `Referee.on_share`, donc des requêtes DB) ne bloque la réception de nouveaux messages
 
 ### `hanlde_message(message)` *(typo conservée)*
 - Parse le JSON

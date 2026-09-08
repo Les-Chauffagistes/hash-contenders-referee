@@ -989,9 +989,6 @@ pluggy==1.6.0 \
     # via
     #   pytest
     #   pytest-cov
-pool-api-types @ https://github.com/Les-Chauffagistes/pool-api-types/releases/download/v0.0.5/pool_api_types-0.1.0-py3-none-any.whl \
-    --hash=sha256:908a797723801011bc1a839006d00a78d4952043191db13c9e0689972b06eda8
-    # via -r requirements.in
 prisma==0.15.0 \
     --hash=sha256:5cd6402aa8322625db3fc1152040404e7fc471fe7f8fa3a314fa8a99529ca107 \
     --hash=sha256:de949cc94d3d91243615f22ff64490aa6e2d7cb81aabffce53d92bd3977c09a4

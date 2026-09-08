@@ -3,9 +3,10 @@ from datetime import datetime
 from enum import Enum
 import json
 import websockets
-from pool_api_types.models import Share
-from init import API_TOKEN, log
+from chauff_cmn.models import Share
+from chauff_cmn.logging import logger as log
 from typing import Any, Awaitable, Callable, Optional
+from src.settings import settings
 from src.utils.converter import from_number_to_string
 
 
@@ -29,14 +30,14 @@ class WebsocketWrapper:
         if self._ws is not None:
             await self._ws.close()
 
-    async def _disconect_and_reconnect(self, reason: str, e: Optional[Exception]):
+    async def _disconnect_and_reconnect(self, reason: str, e: Optional[Exception]):
         self.status = Status.DISCONNECTED
         if not self._running:
             return
         log.warning(f"{reason}\n.{e}\nReconnexion dans 5 secondes...")
         await asyncio.sleep(5)
 
-    async def hanlde_message(self, message: websockets.Data):
+    async def handle_message(self, message: websockets.Data):
         try:
             data: dict = json.loads(message)
             if data.get("type") == "hello":
@@ -74,7 +75,7 @@ class WebsocketWrapper:
             try:
                 message = await asyncio.wait_for(self._queue.get(), timeout=1.0)
                 try:
-                    await self.hanlde_message(message)
+                    await self.handle_message(message)
                 except Exception:
                     log.exception("")
                 finally:
@@ -92,7 +93,7 @@ class WebsocketWrapper:
                     self.status = Status.CONNECTING
                     async with websockets.connect(
                         self.uri,
-                        additional_headers={"Authorization": f"Bearer {API_TOKEN}"},
+                        additional_headers={"Authorization": f"Bearer {settings.api_token}"},
                         max_size=10 * 1024 * 1024,  # 10MB pour les gros messages
                     ) as ws:
                         self._ws = ws
@@ -110,7 +111,7 @@ class WebsocketWrapper:
                     reason, error = str(e), e
                 finally:
                     self._ws = None
-                    await self._disconect_and_reconnect(reason, error)
+                    await self._disconnect_and_reconnect(reason, error)
         finally:
             self._running = False
             worker_task.cancel()
