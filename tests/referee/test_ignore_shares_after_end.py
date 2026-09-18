@@ -33,7 +33,12 @@ def make_share(address: str, block_height: int, diff: float = 100.0) -> Share:
 async def test_ignore_share_after_max_rounds_reached(
     prisma_tx: Prisma, referee: Referee
 ):
-    """Les shares après le nombre max de rounds ne doivent pas créer de nouveau round"""
+    """Les shares après le nombre max de rounds ne doivent pas créer de nouveau round.
+    Ici, seul contender 1 joue : aucun round ne peut jamais être finalisé
+    équitablement (contender 2 n'a rien soumis), donc dès que le max de
+    rounds créés est atteint, ils sont tous nettoyés et la bataille se
+    termine (sans quoi elle resterait bloquée indéfiniment - bug historique
+    de la battle 13)."""
     battle = await prisma_tx.battles.create(
         data={
             "id": 1,
@@ -58,13 +63,23 @@ async def test_ignore_share_after_max_rounds_reached(
     rounds_count = await prisma_tx.rounds.count(where={"battle_id": battle.id})
     assert rounds_count == 3
 
-    # Envoyer un share pour un nouveau bloc (403) - devrait être ignoré
+    # Envoyer un share pour un nouveau bloc (403) : le max est atteint, aucun
+    # round n'a pu être finalisé -> ils sont nettoyés et la bataille se termine
     share_after = make_share("bc1_address", block_height=403)
     await referee.on_share(battle, share_after)
 
-    # Vérifier qu'aucun nouveau round n'a été créé
+    # Aucun round n'a jamais pu être décidé équitablement : tous nettoyés,
+    # jamais plus de 3 rounds n'auront existé
     rounds_count = await prisma_tx.rounds.count(where={"battle_id": battle.id})
-    assert rounds_count == 3
+    assert rounds_count == 0
+
+    updated_battle = await prisma_tx.battles.find_unique(where={"id": battle.id})
+    assert updated_battle.is_finished is True
+
+    # Un share supplémentaire, envoyé après la fin, est ignoré
+    await referee.on_share(battle, make_share("bc1_address", block_height=404))
+    rounds_count_after = await prisma_tx.rounds.count(where={"battle_id": battle.id})
+    assert rounds_count_after == 0
 
 
 @pytest.mark.asyncio
@@ -146,7 +161,10 @@ async def test_allow_both_contenders_on_last_round(
 
 @pytest.mark.asyncio
 async def test_ignore_multiple_shares_after_end(prisma_tx: Prisma, referee: Referee):
-    """Plusieurs shares après la fin de la bataille sont tous ignorés"""
+    """Plusieurs shares après la fin de la bataille sont tous ignorés.
+    Seul contender 1 joue : au max de rounds, aucun n'a pu être finalisé,
+    donc ils sont nettoyés et la bataille se termine plutôt que de rester
+    bloquée."""
     battle = await prisma_tx.battles.create(
         data={
             "id": 1,
@@ -173,9 +191,14 @@ async def test_ignore_multiple_shares_after_end(prisma_tx: Prisma, referee: Refe
         share = make_share("bc1_address", block_height=block)
         await referee.on_share(battle, share)
 
-    # Vérifier qu'on a toujours seulement 2 rounds
+    # Le max a été atteint dès le premier de ces shares (402) : aucun round
+    # n'a pu être finalisé équitablement, ils ont tous été nettoyés et la
+    # bataille est terminée. Les shares suivants (403-405) sont ignorés.
     rounds_count = await prisma_tx.rounds.count(where={"battle_id": battle.id})
-    assert rounds_count == 2
+    assert rounds_count == 0
+
+    updated_battle = await prisma_tx.battles.find_unique(where={"id": battle.id})
+    assert updated_battle.is_finished is True
 
 
 @pytest.mark.asyncio
@@ -303,26 +326,36 @@ async def test_single_round_battle(prisma_tx: Prisma, referee: Referee):
 
     referee.event_dispatcher = AsyncMock()
 
-    # Créer le seul round autorisé
-    share = make_share("bc1_address", block_height=400, diff=100.0)
-    await referee.on_share(battle, share)
+    # Créer le seul round autorisé, joué par les deux contenders
+    await referee.on_share(battle, make_share("bc1_address", block_height=400, diff=100.0))
+    await referee.on_share(battle, make_share("bc2_address", block_height=400, diff=50.0))
 
     rounds_count = await prisma_tx.rounds.count(where={"battle_id": battle.id})
     assert rounds_count == 1
 
-    # Les shares suivants pour de nouveaux blocs sont ignorés
+    # Share pour un nouveau bloc : le max (1 round) est atteint -> le round
+    # 400 est force-finalisé (les deux ont joué) et la bataille se termine,
+    # aucun round supplémentaire n'est créé
     share_after = make_share("bc1_address", block_height=401)
     await referee.on_share(battle, share_after)
 
     rounds_count = await prisma_tx.rounds.count(where={"battle_id": battle.id})
     assert rounds_count == 1
 
-    # Mais on peut toujours mettre à jour le round en cours
-    better_share = make_share("bc2_address", block_height=400, diff=200.0)
-    await referee.on_share(battle, better_share)
-
     the_round = await prisma_tx.rounds.find_unique(
         where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
     )
     assert the_round is not None
-    assert the_round.contender_2_best_diff == 200
+    assert the_round.finalized_at is not None
+    assert the_round.winner == 1
+
+    updated_battle = await prisma_tx.battles.find_unique(where={"id": battle.id})
+    assert updated_battle.is_finished is True
+
+    # Les shares suivants, envoyés après la fin, sont ignorés
+    await referee.on_share(battle, make_share("bc2_address", block_height=400, diff=200.0))
+
+    the_round_after = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
+    )
+    assert the_round_after.contender_2_best_diff == 50

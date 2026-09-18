@@ -230,24 +230,32 @@ class Referee:
             last_round = await self.get_current_round(battle.id)
             if last_round:
                 closed = await self._force_finalize_last_round(battle.id, last_round.block_height)
-                if closed:
-                    for r in closed:
-                        pv1, pv2 = await self.compute_pv(battle)
-                        await self.event_dispatcher.hit_result(
-                            battle=battle,
-                            winner=r["winner"],
-                            block_height=r["block_height"],
-                            contender_1_best_diff=r["contender_1_best_diff"],
-                            contender_2_best_diff=r["contender_2_best_diff"],
-                            contender_1_pv=pv1,
-                            contender_2_pv=pv2,
-                        )
-                    # Un KO peut survenir sur ce dernier round. Sinon la bataille se
-                    # termine quand même : le max de rounds est atteint et aucun round
-                    # supérieur ne sera créé, donc le vainqueur est décidé aux PV.
-                    if not await self._check_ko(battle):
-                        await self._finish_by_max_rounds(battle)
-                    await self.event_dispatcher.client_websockets.close(battle.id)
+                for r in closed:
+                    pv1, pv2 = await self.compute_pv(battle)
+                    await self.event_dispatcher.hit_result(
+                        battle=battle,
+                        winner=r["winner"],
+                        block_height=r["block_height"],
+                        contender_1_best_diff=r["contender_1_best_diff"],
+                        contender_2_best_diff=r["contender_2_best_diff"],
+                        contender_1_pv=pv1,
+                        contender_2_pv=pv2,
+                    )
+                # Le dernier round peut rester sans décision (un contender n'a
+                # jamais soumis de share dessus) : il ne peut pas être tranché
+                # équitablement, donc il ne compte pas comme round joué. Sans
+                # ce nettoyage, la bataille resterait bloquée indéfiniment
+                # (max de rounds atteint, mais jamais close).
+                await self.prisma.execute_raw(
+                    "DELETE FROM rounds WHERE battle_id = $1 AND finalized_at IS NULL",
+                    battle.id,
+                )
+                # Un KO peut survenir sur ce dernier round. Sinon la bataille se
+                # termine quand même : le max de rounds est atteint et aucun round
+                # supérieur ne sera créé, donc le vainqueur est décidé aux PV.
+                if not await self._check_ko(battle):
+                    await self._finish_by_max_rounds(battle)
+                await self.event_dispatcher.client_websockets.close(battle.id)
             return
 
         log.debug(
