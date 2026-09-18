@@ -2,15 +2,15 @@ from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
 from src.rules.Referee import Referee
 from src.rules.hashrate_fetch import HashrateFetch
 from src.database.prisma import close_prisma, init_prisma
-from src.server.middlewares.logger import error_handler
 from chauff_cmn.logging import configure
 from aiohttp.web import Application, RouteTableDef
 from os import getenv
+from chauff_cmn.logging.aiohttp import request_logging_middleware
 
 configure(service="hash-contenders-referee", level=getenv("LOG_LEVEL", "DEBUG"))
 
 app = Application(
-    middlewares=(error_handler,)
+    middlewares=(request_logging_middleware,)
 )
 
 app.on_startup.append(init_prisma) # enregistre prisma dans app["prisma"]
