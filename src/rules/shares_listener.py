@@ -78,7 +78,7 @@ async def shares_listener():
                         connections: list[tuple[WebsocketWrapper, Task]] = []
                         for address in addresses:
                             ws = WebsocketWrapper(
-                                f"{settings.api_url}/shares?address={address}",
+                                f"{settings.api_url}/v1/shares/stream?address={address}",
                                 partial(referee.on_share, battle),
                             )
                             task = create_task(ws.continuous_listener())
