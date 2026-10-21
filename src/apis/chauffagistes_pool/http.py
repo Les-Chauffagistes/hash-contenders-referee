@@ -1,4 +1,4 @@
-from warnings import deprecated
+from typing_extensions import deprecated
 
 from chauff_cmn.models import PoolUser
 from aiohttp import ClientSession
