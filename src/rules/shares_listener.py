@@ -70,6 +70,7 @@ async def shares_listener():
                         for address, workername in zip(addresses, workernames):
                             ws = WebsocketWrapper(
                                 build_shares_url(
+                                    api_url=settings.api_url,
                                     address=address,
                                     worker=workername
                                 ),
