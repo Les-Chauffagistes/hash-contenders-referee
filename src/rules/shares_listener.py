@@ -5,7 +5,7 @@ from asyncio import Task, create_task, sleep, gather
 from functools import partial
 from chauff_cmn.logging import logger as log
 from src.settings import settings
-
+from src.utils.shares import build_shares_url
 
 prisma: Prisma = app["prisma"]
 
@@ -58,27 +58,21 @@ async def shares_listener():
                             f"Added ws for battle {battle.id} "
                             f"{battle.contender_1_address} {battle.contender_2_address}"
                         )
-                        # Toujours souscrire à l'adresse entière, sans filtrer par worker
-                        # côté requête : le filtre `&worker=` du pool s'est avéré peu
-                        # fiable en pratique (sensible à la casse alors que le champ
-                        # `worker` renvoyé dans les shares ne l'est pas forcément,
-                        # provoquant un flux vide et silencieux côté pool). Le
-                        # rapprochement par worker est déjà fait, de façon fiable et
-                        # insensible à la casse, par `Referee._identify_contender`.
-                        #
-                        # Une seule connexion par adresse *distincte* : en mode Mineur
-                        # vs Mineur sur un même compte pool, les deux contenders
-                        # partagent la même adresse. Ouvrir deux connexions identiques
-                        # ferait recevoir (et traiter) chaque share deux fois.
                         addresses = dict.fromkeys(
                             (battle.contender_1_address, battle.contender_2_address)
+                        )
+                        workernames = dict.fromkeys(
+                            (battle.contender_1_worker, battle.contender_2_worker)
                         )
                         for address in addresses:
                             hashrate_fetch.acquire(address, battle.id)
                         connections: list[tuple[WebsocketWrapper, Task]] = []
-                        for address in addresses:
+                        for address, workername in zip(addresses, workernames):
                             ws = WebsocketWrapper(
-                                f"{settings.api_url}/v1/shares/stream?address={address}",
+                                build_shares_url(
+                                    address=address,
+                                    worker=workername
+                                ),
                                 partial(referee.on_share, battle),
                             )
                             task = create_task(ws.continuous_listener())
