@@ -1,38 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock
 from src.rules.Referee import Referee
-from chauff_cmn.models import Share
+from tests.factories import make_share
 from prisma import Prisma
-
-
-def make_share(
-    address: str,
-    block_height: int,
-    diff: float = 100.0,
-    result: bool = True,
-    errn: int = 0,
-) -> Share:
-    """Crée un Share de test, avec la possibilité de marquer une share invalide (result=False/errn!=0)."""
-    return Share(
-        workinfoid=1,
-        clientid=1,
-        diff=diff,
-        sdiff=float(diff),
-        hash="",
-        result=result,
-        errn=errn,
-        createdate="",
-        ts=0.0,
-        workername="",
-        username="",
-        address=address,
-        worker="",
-        workernameAddr="",
-        ip="",
-        agent="",
-        round=hex(block_height),
-        file="",
-    )
 
 
 async def _make_battle(prisma_tx: Prisma):
@@ -59,10 +29,10 @@ async def test_invalid_result_share_does_not_update_best_diff(
     battle = await _make_battle(prisma_tx)
     referee.event_dispatcher = AsyncMock()
 
-    valid = make_share("bc1_address", block_height=400, diff=50.0, result=True, errn=0)
+    valid = make_share("bc1_address", block_height=400, diff=50.0, result=True)
     await referee.on_share(battle, valid)
 
-    invalid_better = make_share("bc1_address", block_height=400, diff=500.0, result=False, errn=0)
+    invalid_better = make_share("bc1_address", block_height=400, diff=500.0, result=False)
     await referee.on_share(battle, invalid_better)
 
     round_row = await prisma_tx.rounds.find_unique(
@@ -73,17 +43,17 @@ async def test_invalid_result_share_does_not_update_best_diff(
 
 
 @pytest.mark.asyncio
-async def test_nonzero_errn_share_does_not_update_best_diff(
+async def test_parse_error_share_does_not_update_best_diff(
     prisma_tx: Prisma, referee: Referee
 ):
-    """Une share avec errn != 0 (erreur pool) ne doit pas non plus compter, même si result=True."""
+    """Une share avec parse_error=True ne doit pas non plus compter, même si result=True."""
     battle = await _make_battle(prisma_tx)
     referee.event_dispatcher = AsyncMock()
 
-    valid = make_share("bc2_address", block_height=400, diff=50.0, result=True, errn=0)
+    valid = make_share("bc2_address", block_height=400, diff=50.0, result=True)
     await referee.on_share(battle, valid)
 
-    invalid_better = make_share("bc2_address", block_height=400, diff=500.0, result=True, errn=1)
+    invalid_better = make_share("bc2_address", block_height=400, diff=500.0, result=True, parse_error=True)
     await referee.on_share(battle, invalid_better)
 
     round_row = await prisma_tx.rounds.find_unique(
@@ -101,7 +71,7 @@ async def test_invalid_share_does_not_dispatch_best_share_event(
     battle = await _make_battle(prisma_tx)
     referee.event_dispatcher = AsyncMock()
 
-    invalid = make_share("bc1_address", block_height=400, diff=500.0, result=False, errn=0)
+    invalid = make_share("bc1_address", block_height=400, diff=500.0, result=False)
     await referee.on_share(battle, invalid)
 
     referee.event_dispatcher.new_best_share.assert_not_called()

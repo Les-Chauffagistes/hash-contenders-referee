@@ -1,8 +1,9 @@
 from prisma import Prisma
 from prisma.models import battles
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
-from chauff_cmn.models import Share
+from chauff_cmn.models import PoolWebsocketShareElement
 from chauff_cmn.logging import logger as log
+from src.utils.shares import get_worker_name
 from src.apis.contenders import send_termination_event_to_frontend
 
 
@@ -174,14 +175,14 @@ class Referee:
             block_height,
         )
 
-    async def on_share(self, battle: battles, payload: Share):
+    async def on_share(self, battle: battles, payload: PoolWebsocketShareElement):
         # log.debug(
         #     f"[BATTLE {battle.id}] Share reçu | worker={payload.worker} diff={payload.diff} "
         #     f"round={payload.round} replay={replay}"
         # )
 
 
-        block_height = int(payload.round, 16)
+        block_height = payload.block_height
 
         log.debug(
             f"[BATTLE {battle.id}] Block height décodé = {block_height}"
@@ -334,7 +335,7 @@ class Referee:
         send_termination_event_to_frontend(battle.id)
 
 
-    async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
+    async def _ensure_round_exists(self, battle: battles, block_height: int, payload: PoolWebsocketShareElement) -> bool:
         """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
         Renvoie False si le max rounds est dépassé (le share doit être ignoré)."""
         existing_round = await self.prisma.rounds.find_unique(
@@ -362,7 +363,7 @@ class Referee:
 
         return True
 
-    def _identify_contender(self, battle: battles, payload: Share) -> str | None:
+    def _identify_contender(self, battle: battles, payload: PoolWebsocketShareElement) -> str | None:
         """Identifie à quel contender appartient un share. L'adresse seule ne suffit
         pas : deux contenders "Mineur vs Mineur" ciblant le même compte pool (cas
         réel le plus courant) partagent la même adresse, distingués uniquement par
@@ -373,18 +374,18 @@ class Referee:
             # firmware ou le pool (ex: "Fulcran" saisi côté UI vs "fulcran" renvoyé
             # dans le share) : comparaison insensible à la casse pour ne pas dépendre
             # de cette normalisation.
-            return not configured or payload.worker.casefold() == configured.casefold()
+            return not configured or get_worker_name(payload).casefold() == configured.casefold()
 
-        matches_1 = payload.address == battle.contender_1_address and worker_matches(
+        matches_1 = payload.username == battle.contender_1_address and worker_matches(
             battle.contender_1_worker
         )
-        matches_2 = payload.address == battle.contender_2_address and worker_matches(
+        matches_2 = payload.username == battle.contender_2_address and worker_matches(
             battle.contender_2_worker
         )
         if matches_1 and matches_2:
             log.warning(
                 f"[BATTLE {battle.id}] Share ambigu (adresse+worker matchent les deux "
-                f"contenders) : address={payload.address!r} worker={payload.worker!r}"
+                f"contenders) : workername={payload.workername!r}"
             )
             return None
         if matches_1:
@@ -393,19 +394,19 @@ class Referee:
             return "contender_2"
         return None
 
-    async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
+    async def _update_best_share(self, battle: battles, block_height: int, payload: PoolWebsocketShareElement):
         """Identifie le contender et met à jour le best diff si supérieur."""
-        if not payload.result or payload.errn != 0:
+        if not payload.result or payload.parse_error:
             # Share rejetée côté pool : ne doit jamais pouvoir décider de l'arbitrage.
             log.debug(
-                f"Ignoring invalid share (result={payload.result}, errn={payload.errn}) "
-                f"from {payload.address} at block {block_height}"
+                f"Ignoring invalid share (result={payload.result}, parse_error={payload.parse_error}) "
+                f"from {payload.username} at block {block_height}"
             )
             return
 
         contender = self._identify_contender(battle, payload)
         log.debug(
-            f"[BATTLE {battle.id}] Share address={payload.address!r} worker={payload.worker!r} "
+            f"[BATTLE {battle.id}] Share workername={payload.workername!r} "
             f"identifié comme {contender!r}"
         )
         if contender == "contender_1":
@@ -429,7 +430,7 @@ class Referee:
         else:
             log.warning(
                 f"[BATTLE {battle.id}] Share ignoré, ne correspond à aucun contender : "
-                f"reçu address={payload.address!r} worker={payload.worker!r} | "
+                f"reçu workername={payload.workername!r} | "
                 f"attendu contender_1 address={battle.contender_1_address!r} worker={battle.contender_1_worker!r}, "
                 f"contender_2 address={battle.contender_2_address!r} worker={battle.contender_2_worker!r}"
             )

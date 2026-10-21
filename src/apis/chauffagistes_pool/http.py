@@ -1,9 +1,12 @@
+from warnings import deprecated
+
 from chauff_cmn.models import PoolUser
 from aiohttp import ClientSession
 from chauff_cmn.models import PoolApiDataPayload, Worker
 from src.settings import settings
 
 
+@deprecated("Use new shared API caller")
 class PoolAPIClient:
     def __init__(self):
         self._session = ClientSession(settings.pool_api_url)

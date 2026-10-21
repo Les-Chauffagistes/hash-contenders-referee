@@ -1,31 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock
 from src.rules.Referee import Referee
-from chauff_cmn.models import Share
+from tests.factories import make_share
 from prisma import Prisma
-
-
-def make_share(address: str, block_height: int, diff: float = 100.0) -> Share:
-    return Share(
-        workinfoid=1,
-        clientid=1,
-        diff=diff,
-        sdiff=float(diff),
-        hash="",
-        result=True,
-        errn=0,
-        createdate="",
-        ts=0.0,
-        workername="",
-        username="",
-        address=address,
-        worker="",
-        workernameAddr="",
-        ip="",
-        agent="",
-        round=hex(block_height),
-        file="",
-    )
 
 
 async def create_battle(prisma_tx: Prisma, contenders_pv: int = 2, rounds: int = 10):

@@ -1,12 +1,12 @@
 import asyncio
-from datetime import datetime
 from enum import Enum
 import json
 import websockets
-from chauff_cmn.models import Share
+from chauff_cmn.models import PoolWebsocketShareElement
 from chauff_cmn.logging import logger as log
 from typing import Any, Awaitable, Callable, Optional
 from src.settings import settings
+from src.utils.shares import get_worker_name
 from src.utils.converter import from_number_to_string
 
 
@@ -17,7 +17,7 @@ class Status(Enum):
 
 
 class WebsocketWrapper:
-    def __init__(self, uri: str, on_message: Callable[[Share], Awaitable[Any]]):
+    def __init__(self, uri: str, on_message: Callable[[PoolWebsocketShareElement], Awaitable[Any]]):
         self.uri = uri
         self.on_message = on_message
         self.status: Status = Status.DISCONNECTED
@@ -44,11 +44,11 @@ class WebsocketWrapper:
                 return
 
             elif data.get("type") == "share":
-                parsed_data = Share(**data["share"])
+                parsed_data = PoolWebsocketShareElement(**data)
                 log.debug(
-                    f"{from_number_to_string(int(parsed_data.sdiff))} from {parsed_data.worker} "
-                    f"at {datetime.fromtimestamp(parsed_data.ts).strftime('%H:%M:%S')} "
-                    f"at block {int(parsed_data.round, 16)}"
+                    f"{from_number_to_string(int(parsed_data.sdiff))} from {get_worker_name(parsed_data)} "
+                    f"at {parsed_data.created_at.strftime('%H:%M:%S')} "
+                    f"at block {parsed_data.block_height}"
                 )
 
             else:

@@ -27,7 +27,7 @@ services:
       retries: 3
 
   db:
-    image: postgres:18.1-alpine3.23
+    image: postgres:16
     environment:
       POSTGRES_USER: ${POSTGRE_USER}
       POSTGRES_PASSWORD: ${POSTGRE_PASSWORD}

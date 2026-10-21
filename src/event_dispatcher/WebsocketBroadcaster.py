@@ -1,7 +1,7 @@
 from datetime import datetime
 from state import ClientWebsockets
 from prisma.models import battles
-from chauff_cmn.models import PoolUser, Share
+from chauff_cmn.models import PoolUser, PoolWebsocketShareElement
 
 
 class WebsocketBroadcaster:
@@ -17,24 +17,24 @@ class WebsocketBroadcaster:
             },
         )
 
-    async def new_best_share(self, battle: battles, contender: str, payload: Share):
+    async def new_best_share(self, battle: battles, contender: str, payload: PoolWebsocketShareElement):
         await self.client_websockets.broadcast(
             battle.id,
             {
                 "type": "BEST_SHARE_UPDATE",
                 "user": contender,
                 "diff": payload.sdiff,
-                "block_height": payload.round,
+                "block_height": payload.block_height,
             },
         )
 
-    async def new_round(self, battle: battles, round_number: int, payload: Share):
+    async def new_round(self, battle: battles, round_number: int, payload: PoolWebsocketShareElement):
         await self.client_websockets.broadcast(
             battle.id,
             {
                 "type": "ROUND_UPDATE",
                 "round": round_number,
-                "block_height": payload.round,
+                "block_height": payload.block_height,
             },
         )
     
