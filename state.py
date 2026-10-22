@@ -1,5 +1,6 @@
 from typing import Any
 from aiohttp.web import WebSocketResponse
+from chauff_cmn.logging import logger as log
 
 
 
@@ -13,7 +14,6 @@ class ClientWebsockets:
         self.__websockets[int(battle_id)].append(ws)
     
     async def broadcast(self, battle_id: int, data: dict[str, Any]):
-        from init import log
         candidates = self.__websockets.get(battle_id, []).copy()
         for ws in candidates:
             try:

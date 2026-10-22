@@ -118,7 +118,7 @@ class WebsocketWrapper:
                 await self.cursor.init(start)  # premier démarrage: point de départ du flux
                 self._last = start
         if head is not None and self._last is not None and head[0] == self._last[0] and head[1] > self._last[1]:
-            log.info(f"{self.uri}: rattrapage de {head[1] - self._last[1]} shares")
+            log.info(f"{self.uri}: rattrapage, {head[1] - self._last[1]} seq de retard (tous flux confondus)")
 
     async def _deliver(self, share: PoolWebsocketShareElement) -> bool:
         """Traite un share, avec retries. False si abandonné (la bataille ne doit pas rester bloquée dessus)."""
