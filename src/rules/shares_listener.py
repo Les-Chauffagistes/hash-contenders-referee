@@ -5,7 +5,7 @@ from asyncio import Task, create_task, sleep, gather
 from functools import partial
 from chauff_cmn.logging import logger as log
 from src.settings import settings
-from src.utils.shares import build_shares_url
+from src.utils.shares import build_shares_url, contender_streams
 
 prisma: Prisma = app["prisma"]
 
@@ -58,21 +58,17 @@ async def shares_listener():
                             f"Added ws for battle {battle.id} "
                             f"{battle.contender_1_address} {battle.contender_2_address}"
                         )
-                        addresses = dict.fromkeys(
-                            (battle.contender_1_address, battle.contender_2_address)
-                        )
-                        workernames = dict.fromkeys(
-                            (battle.contender_1_worker, battle.contender_2_worker)
-                        )
+                        streams = contender_streams(battle)
+                        addresses = dict.fromkeys(stream.address for stream in streams)
                         for address in addresses:
                             hashrate_fetch.acquire(address, battle.id)
                         connections: list[tuple[WebsocketWrapper, Task]] = []
-                        for address, workername in zip(addresses, workernames):
+                        for stream in streams:
                             ws = WebsocketWrapper(
                                 build_shares_url(
                                     api_url=settings.api_url,
-                                    address=address,
-                                    worker=workername
+                                    address=stream.address,
+                                    worker=stream.worker,
                                 ),
                                 partial(referee.on_share, battle),
                             )

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from chauff_cmn.models import PoolWebsocketShareElement
 from urllib.parse import quote
 
@@ -22,3 +23,36 @@ def build_shares_url(api_url: str, address: str, worker: str | None) -> str:
         return f"{base_url}?workername={quote(f"{address}.{worker}", safe = '')}"
     else:
         return f"{base_url}?address={address}"
+
+
+
+@dataclass(frozen=True)
+class ShareStream:
+    """Un flux WS du pool: un filtre (adresse, worker optionnel) et les contenders (1 et/ou 2) qu'il alimente."""
+    address: str
+    worker: str | None
+    contenders: tuple[int, ...]
+
+
+def contender_streams(battle) -> list[ShareStream]:
+    """Un flux par filtre *distinct* de la bataille.
+
+    Deux contenders au même filtre (même adresse et même worker, casse ignorée comme côté pool) partagent un
+    flux: deux connexions identiques feraient traiter chaque share deux fois. Mais deux contenders de même
+    adresse et de workers différents (Mineur vs Mineur) ont chacun le leur, de même que deux adresses sans
+    worker (Pool vs Pool).
+    """
+    streams: dict[tuple[str, str | None], list[int]] = {}
+    for number in (1, 2):
+        address = getattr(battle, f"contender_{number}_address")
+        worker = getattr(battle, f"contender_{number}_worker") or None
+        key = (address, worker.casefold() if worker else None)
+        streams.setdefault(key, []).append(number)
+    return [
+        ShareStream(
+            address=address,
+            worker=getattr(battle, f"contender_{numbers[0]}_worker") or None,
+            contenders=tuple(numbers),
+        )
+        for (address, _), numbers in streams.items()
+    ]
