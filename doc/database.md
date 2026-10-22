@@ -40,6 +40,21 @@ Représente un block miné pendant la bataille. Clé primaire composite `(battle
 | `damage` | `Int?` | Non utilisé actuellement |
 | `finalized_at` | `DateTime?` | `NULL` = round encore ouvert ; sinon timestamp de fermeture |
 
+### `share_cursors`
+
+Curseur de reprise du flux WebSocket du pool, par bataille et par filtre. Clé primaire composite `(battle_id, stream_key)`, supprimée avec la bataille (`ON DELETE CASCADE`).
+
+| Colonne | Type | Description |
+|---|---|---|
+| `battle_id` | `BigInt` FK | Référence vers `battles.id` |
+| `stream_key` | `String` | Le filtre du flux (`address=<adresse>` ou `workername=<adresse>.<worker>`) |
+| `epoch` | `BigInt` | epoch du dernier share traité |
+| `seq` | `BigInt` | seq du dernier share traité |
+| `gap_count` | `Int` | Nombre de pertes avérées (curseur hors rétention, share abandonné après échecs) |
+| `updated_at` | `DateTime` | Dernière écriture |
+
+Voir [Shares Listener](./shares-listener.md#reprise-par-curseur-srcdatabasesharecursorspy-table-share_cursors).
+
 ## Requêtes SQL importantes
 
 ### Création d'un round (idempotente)

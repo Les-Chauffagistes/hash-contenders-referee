@@ -14,6 +14,11 @@ def get_worker_name(share: PoolWebsocketShareElement) -> str:
     return share.workername.removeprefix(f"{share.username}.")
 
 
+def stream_key(address: str, worker: str | None) -> str:
+    """Identifie un flux par son filtre: un curseur de reprise n'est valable qu'avec le même filtre."""
+    return f"workername={address}.{worker}" if worker else f"address={address}"
+
+
 def build_shares_url(api_url: str, address: str, worker: str | None) -> str:
     """Construit l'URL WS `/shares` pour un contender. Si `worker` est renseigné, la
     connexion est restreinte à ce mineur (le pool filtre lui-même via ce query param) ;

@@ -13,6 +13,15 @@ from src.rules.Referee import Referee
 from testcontainers.postgres import PostgresContainer
 
 
+# Valeurs de test par défaut pour `src.settings.Settings` (importé par ws.py, init.py...), seulement si absentes.
+os.environ.setdefault("API_URL", "wss://shares-ws.test.invalid/ws")
+os.environ.setdefault("API_TOKEN", "test-api-token")
+os.environ.setdefault("AUTH_API_URL", "http://auth.test.invalid")
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret")
+os.environ.setdefault("SERVER_PORT", "8095")
+os.environ.setdefault("FRONTEND_URL", "http://localhost:3003")
+os.environ.setdefault("POOL_API_URL", "http://pool.test.invalid")
+
 POSTGRES_IMAGE = "postgres:18.1-alpine3.23"
 
 

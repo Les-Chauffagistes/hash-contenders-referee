@@ -1,11 +1,12 @@
 from prisma import Prisma
+from src.database.share_cursors import StreamCursor
 from src.apis.chauffagistes_pool.ws import WebsocketWrapper
 from init import app, referee, hashrate_fetch
 from asyncio import Task, create_task, sleep, gather
 from functools import partial
 from chauff_cmn.logging import logger as log
 from src.settings import settings
-from src.utils.shares import build_shares_url, contender_streams
+from src.utils.shares import build_shares_url, contender_streams, stream_key
 
 prisma: Prisma = app["prisma"]
 
@@ -71,6 +72,7 @@ async def shares_listener():
                                     worker=stream.worker,
                                 ),
                                 partial(referee.on_share, battle),
+                                StreamCursor(prisma, battle.id, stream_key(stream.address, stream.worker)),
                             )
                             task = create_task(ws.continuous_listener())
                             connections.append((ws, task))
