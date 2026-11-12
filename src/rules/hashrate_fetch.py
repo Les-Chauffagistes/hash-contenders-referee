@@ -1,8 +1,9 @@
+from src.settings import settings
 import asyncio
 
-from src.apis.chauffagistes_pool.http import PoolAPIClient
 from chauff_cmn.logging import logger as log
-from chauff_cmn.models import PoolUser
+from chauff_cmn.models import PoolStats
+from chauff_cmn.callers.pools import PoolAPIClient
 
 POLL_INTERVAL_SECONDS = 15
 
@@ -22,9 +23,9 @@ class HashrateFetch:
     def __init__(self):
         self._tasks: dict[str, asyncio.Task] = {}
         self._subscribers: dict[str, set[int]] = {}
-        self._latest: dict[str, PoolUser] = {}
+        self._latest: dict[str, PoolStats] = {}
 
-    def get_latest(self, address: str) -> PoolUser | None:
+    def get_latest(self, address: str) -> PoolStats | None:
         """Dernière donnée connue pour cette adresse, sans appel réseau. Utilisé
         par l'API HTTP à la demande."""
         return self._latest.get(address)
@@ -71,11 +72,11 @@ class HashrateFetch:
                 await self.release(address, battle_id)
 
     async def _poll(self, address: str) -> None:
-        client = PoolAPIClient()
+        client = PoolAPIClient(settings.pool_api_url, "")
         try:
             while True:
                 try:
-                    data = await client.get_pool_data(address)
+                    data = await client.get_pool_stats(address)
                     if data != self._latest.get(address):
                         self._latest[address] = data
                         await self._broadcast(address, data)
@@ -88,7 +89,7 @@ class HashrateFetch:
         finally:
             await client.close()
 
-    async def _broadcast(self, address: str, data: PoolUser) -> None:
+    async def _broadcast(self, address: str, data: PoolStats) -> None:
         if self.event_dispatcher is None:
             return
         for battle_id in self._subscribers.get(address, ()):
