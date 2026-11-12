@@ -1,7 +1,9 @@
 from prisma import Prisma
-from prisma.models import battles, rounds
+from prisma.models import battles
 from src.event_dispatcher.WebsocketBroadcaster import WebsocketBroadcaster
-from pool_api_types.models import Share
+from chauff_cmn.models import PoolWebsocketShareElement
+from chauff_cmn.logging import logger as log
+from src.utils.shares import get_worker_name
 from src.apis.contenders import send_termination_event_to_frontend
 
 
@@ -78,7 +80,7 @@ class Referee:
             battle_id,
             block_height,
         )
-        self.log.info(f"Created round? {result}")
+        log.info(f"Created round? {result}")
         return result == 1
 
     async def _get_rounds_to_close(self, battle: battles, block_height: int):
@@ -173,89 +175,97 @@ class Referee:
             block_height,
         )
 
-    async def on_share(self, battle: battles, payload: Share):
-        # self.log.debug(
+    async def on_share(self, battle: battles, payload: PoolWebsocketShareElement):
+        # log.debug(
         #     f"[BATTLE {battle.id}] Share reçu | worker={payload.worker} diff={payload.diff} "
         #     f"round={payload.round} replay={replay}"
         # )
 
 
-        block_height = int(payload.round, 16)
+        block_height = payload.block_height
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Block height décodé = {block_height}"
         )
 
         # Ignorer les shares si la bataille est terminée
         if battle.is_finished:
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : battle déjà terminée"
             )
             return
 
         # Ignorer les shares avant le début de la bataille
         if block_height < battle.start_height:
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : block {block_height} "
                 f"< start_height {battle.start_height}"
             )
             return
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Traitement du share pour block {block_height}"
         )
 
         if await self._finalize_and_broadcast(battle, block_height):
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] KO détecté après fermeture de round"
             )
             return
 
         # Re-vérifier après les awaits : l'autre task a pu clôturer la bataille
         if battle.is_finished:
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Battle terminée pendant le traitement"
             )
             return
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Vérification / création du round pour block {block_height}"
         )
 
         if not await self._ensure_round_exists(battle, block_height, payload):
-            self.log.debug(
+            log.debug(
                 f"[BATTLE {battle.id}] Share ignoré : round non créé (max rounds atteint)"
             )
             last_round = await self.get_current_round(battle.id)
             if last_round:
                 closed = await self._force_finalize_last_round(battle.id, last_round.block_height)
-                if closed:
-                    for r in closed:
-                        pv1, pv2 = await self.compute_pv(battle)
-                        await self.event_dispatcher.hit_result(
-                            battle=battle,
-                            winner=r["winner"],
-                            block_height=r["block_height"],
-                            contender_1_best_diff=r["contender_1_best_diff"],
-                            contender_2_best_diff=r["contender_2_best_diff"],
-                            contender_1_pv=pv1,
-                            contender_2_pv=pv2,
-                        )
-                    # Un KO peut survenir sur ce dernier round. Sinon la bataille se
-                    # termine quand même : le max de rounds est atteint et aucun round
-                    # supérieur ne sera créé, donc le vainqueur est décidé aux PV.
-                    if not await self._check_ko(battle):
-                        await self._finish_by_max_rounds(battle)
-                    await self.event_dispatcher.client_websockets.close(battle.id)
+                for r in closed:
+                    pv1, pv2 = await self.compute_pv(battle)
+                    await self.event_dispatcher.hit_result(
+                        battle=battle,
+                        winner=r["winner"],
+                        block_height=r["block_height"],
+                        contender_1_best_diff=r["contender_1_best_diff"],
+                        contender_2_best_diff=r["contender_2_best_diff"],
+                        contender_1_pv=pv1,
+                        contender_2_pv=pv2,
+                    )
+                # Le dernier round peut rester sans décision (un contender n'a
+                # jamais soumis de share dessus) : il ne peut pas être tranché
+                # équitablement, donc il ne compte pas comme round joué. Sans
+                # ce nettoyage, la bataille resterait bloquée indéfiniment
+                # (max de rounds atteint, mais jamais close).
+                await self.prisma.execute_raw(
+                    "DELETE FROM rounds WHERE battle_id = $1 AND finalized_at IS NULL",
+                    battle.id,
+                )
+                # Un KO peut survenir sur ce dernier round. Sinon la bataille se
+                # termine quand même : le max de rounds est atteint et aucun round
+                # supérieur ne sera créé, donc le vainqueur est décidé aux PV.
+                if not await self._check_ko(battle):
+                    await self._finish_by_max_rounds(battle)
+                await self.event_dispatcher.client_websockets.close(battle.id)
             return
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Round OK, tentative mise à jour best share"
         )
 
         await self._update_best_share(battle, block_height, payload)
 
-        self.log.debug(
+        log.debug(
             f"[BATTLE {battle.id}] Fin traitement share diff={payload.sdiff}"
         )
 
@@ -325,7 +335,7 @@ class Referee:
         send_termination_event_to_frontend(battle.id)
 
 
-    async def _ensure_round_exists(self, battle: battles, block_height: int, payload: Share) -> bool:
+    async def _ensure_round_exists(self, battle: battles, block_height: int, payload: PoolWebsocketShareElement) -> bool:
         """Vérifie si le round existe, sinon le crée si le max n'est pas atteint.
         Renvoie False si le max rounds est dépassé (le share doit être ignoré)."""
         existing_round = await self.prisma.rounds.find_unique(
@@ -340,7 +350,7 @@ class Referee:
         if existing_round is None:
             current_round_count = await self.get_current_round_number(battle.id)
             if current_round_count >= battle.rounds:
-                self.log.debug(
+                log.debug(
                     f"Ignoring share for battle {battle.id} at block {block_height}, "
                     f"battle has reached max rounds ({battle.rounds})"
                 )
@@ -353,7 +363,7 @@ class Referee:
 
         return True
 
-    def _identify_contender(self, battle: battles, payload: Share) -> str | None:
+    def _identify_contender(self, battle: battles, payload: PoolWebsocketShareElement) -> str | None:
         """Identifie à quel contender appartient un share. L'adresse seule ne suffit
         pas : deux contenders "Mineur vs Mineur" ciblant le même compte pool (cas
         réel le plus courant) partagent la même adresse, distingués uniquement par
@@ -364,18 +374,18 @@ class Referee:
             # firmware ou le pool (ex: "Fulcran" saisi côté UI vs "fulcran" renvoyé
             # dans le share) : comparaison insensible à la casse pour ne pas dépendre
             # de cette normalisation.
-            return not configured or payload.worker.casefold() == configured.casefold()
+            return not configured or get_worker_name(payload).casefold() == configured.casefold()
 
-        matches_1 = payload.address == battle.contender_1_address and worker_matches(
+        matches_1 = payload.username == battle.contender_1_address and worker_matches(
             battle.contender_1_worker
         )
-        matches_2 = payload.address == battle.contender_2_address and worker_matches(
+        matches_2 = payload.username == battle.contender_2_address and worker_matches(
             battle.contender_2_worker
         )
         if matches_1 and matches_2:
-            self.log.warning(
+            log.warning(
                 f"[BATTLE {battle.id}] Share ambigu (adresse+worker matchent les deux "
-                f"contenders) : address={payload.address!r} worker={payload.worker!r}"
+                f"contenders) : workername={payload.workername!r}"
             )
             return None
         if matches_1:
@@ -384,19 +394,19 @@ class Referee:
             return "contender_2"
         return None
 
-    async def _update_best_share(self, battle: battles, block_height: int, payload: Share):
+    async def _update_best_share(self, battle: battles, block_height: int, payload: PoolWebsocketShareElement):
         """Identifie le contender et met à jour le best diff si supérieur."""
-        if not payload.result or payload.errn != 0:
+        if not payload.result or payload.parse_error:
             # Share rejetée côté pool : ne doit jamais pouvoir décider de l'arbitrage.
-            self.log.debug(
-                f"Ignoring invalid share (result={payload.result}, errn={payload.errn}) "
-                f"from {payload.address} at block {block_height}"
+            log.debug(
+                f"Ignoring invalid share (result={payload.result}, parse_error={payload.parse_error}) "
+                f"from {payload.username} at block {block_height}"
             )
             return
 
         contender = self._identify_contender(battle, payload)
-        self.log.debug(
-            f"[BATTLE {battle.id}] Share address={payload.address!r} worker={payload.worker!r} "
+        log.debug(
+            f"[BATTLE {battle.id}] Share workername={payload.workername!r} "
             f"identifié comme {contender!r}"
         )
         if contender == "contender_1":
@@ -418,9 +428,9 @@ class Referee:
                 RETURNING contender_2_best_diff;
             """
         else:
-            self.log.warning(
+            log.warning(
                 f"[BATTLE {battle.id}] Share ignoré, ne correspond à aucun contender : "
-                f"reçu address={payload.address!r} worker={payload.worker!r} | "
+                f"reçu workername={payload.workername!r} | "
                 f"attendu contender_1 address={battle.contender_1_address!r} worker={battle.contender_1_worker!r}, "
                 f"contender_2 address={battle.contender_2_address!r} worker={battle.contender_2_worker!r}"
             )

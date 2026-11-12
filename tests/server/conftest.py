@@ -14,6 +14,7 @@ os.environ.setdefault("AUTH_API_URL", "http://auth.test.invalid")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret")
 os.environ.setdefault("SERVER_PORT", "8095")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3003")
+os.environ.setdefault("POOL_API_URL", "http://pool.test.invalid")
 
 import pytest
 from init import app as global_app, referee as global_referee

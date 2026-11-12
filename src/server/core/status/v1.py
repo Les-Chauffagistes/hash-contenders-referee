@@ -1,7 +1,8 @@
 from typing import NotRequired, TypedDict
 from prisma import Prisma
-from prisma.models import battles, rounds
-from init import app, log, referee
+from prisma.models import rounds
+from chauff_cmn.logging import logger as log
+from init import app, referee
 from src.server.utils.formatter import format_row, format_rows
 
 

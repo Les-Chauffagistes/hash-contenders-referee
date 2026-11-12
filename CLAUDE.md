@@ -56,6 +56,7 @@ prisma db push    # apply schema to database
 ### Database (Prisma + PostgreSQL)
 - `battles`: Active/finished battles with contender info and PV settings
 - `rounds`: Per-block-height round data with best difficulties and winner
+- `share_cursors`: Resume cursor `(epoch, seq)` of each pool WebSocket stream; read on every (re)connection, written after each processed share, never kept locally
 
 ### Dependency Injection Pattern
 Dependencies (`prisma`, `log`, `event_dispatcher`) are injected into `Referee` class attributes at startup in `main.py` rather than passed via constructor.

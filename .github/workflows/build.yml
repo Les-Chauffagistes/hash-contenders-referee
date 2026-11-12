@@ -11,7 +11,7 @@ jobs:
   test:
     uses: Les-Chauffagistes/deploy/.github/workflows/test.yml@develop
     with:
-      python-version: '3.12'
+      python-version: '3.13'
     secrets: inherit
 
   build-push:

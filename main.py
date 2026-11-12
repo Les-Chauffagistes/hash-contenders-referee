@@ -6,10 +6,12 @@ from dotenv import load_dotenv
 
 load_dotenv(".env")
 
-from init import routes, app, log, event_dispatcher
+from init import routes, app, event_dispatcher
 from src.server.cors import cors
 from aiohttp import web
 from src.rules.Referee import Referee
+from src.rules.hashrate_fetch import HashrateFetch
+from chauff_cmn.logging import logger as log
 from state import client_webosckets
 
 
@@ -52,6 +54,8 @@ async def main():
         Referee.prisma = app["prisma"]
         Referee.log = log
         Referee.event_dispatcher = event_dispatcher
+
+        HashrateFetch.event_dispatcher = event_dispatcher
 
         listener_task = asyncio.create_task(shares_listener())
         stop_task = asyncio.create_task(stop_event.wait())

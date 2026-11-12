@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
@@ -12,10 +12,11 @@ RUN --mount=type=secret,id=pipindex \
     pip install --no-cache-dir --require-hashes --only-binary :all: --trusted-host 10.10.0.3 -r requirements.txt
 
 COPY prisma ./prisma
+RUN python -m nodeenv --node=22.11.0 /root/.cache/prisma-python/nodeenv
 RUN prisma generate
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 WORKDIR /app
 
@@ -23,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 curl libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /root/.cache/prisma-python /root/.cache/prisma-python
 COPY --from=builder /app/prisma ./prisma

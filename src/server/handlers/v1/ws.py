@@ -1,8 +1,9 @@
 from aiohttp import web
 from aiohttp.web_request import Request
 from .base import routes
-from init import log
 from state import client_webosckets
+from chauff_cmn.logging import logger as log
+
 
 log.debug("Adding ws handler")
 

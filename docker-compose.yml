@@ -2,6 +2,8 @@ services:
   app:
     build:
       context: .
+      secrets:
+        - pipindex
     command: >
       sh -c "until prisma migrate deploy; do echo 'DB pas prête, retry...'; sleep 2; done &&
              exec python main.py"
@@ -9,6 +11,8 @@ services:
       - "${SERVER_PORT}:${SERVER_PORT}"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRE_USER}:${POSTGRE_PASSWORD}@db:5432/chauffagistes"
     depends_on:
       db:
         condition: service_healthy
@@ -23,7 +27,7 @@ services:
       retries: 3
 
   db:
-    image: postgres:18.1-alpine3.23
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRE_USER}
       POSTGRES_PASSWORD: ${POSTGRE_PASSWORD}
@@ -41,3 +45,7 @@ services:
 
 volumes:
   pgdata:
+
+secrets:
+  pipindex:
+    environment: PIP_EXTRA_INDEX_URL
