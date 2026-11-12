@@ -12,6 +12,7 @@ RUN --mount=type=secret,id=pipindex \
     pip install --no-cache-dir --require-hashes --only-binary :all: --trusted-host 10.10.0.3 -r requirements.txt
 
 COPY prisma ./prisma
+RUN python -m nodeenv --node=22.11.0 /root/.cache/prisma-python/nodeenv
 RUN prisma generate
 
 
