@@ -11,6 +11,10 @@ class ContenderInfo(TypedDict):
     name: str
     worker: NotRequired[str | None]
     current_round_best_diff: int
+    hashrate_hs: float | None
+    hashrate_fetched_at: str | None
+    hashrate_window_seconds: int
+    hashrate_stale: bool
 
 
 class BattleResponse(TypedDict):
@@ -64,6 +68,14 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
             "current_round_best_diff": best_diff2
         },
     ]
+
+    from src.rules.hashrate import HashratePoller
+    poller = app.get("hashrate_poller")
+    for contender_info in contenders_infos:
+        contender_info.update(
+            poller.get(contender_info["address"], contender_info.get("worker"))
+            if poller else HashratePoller("", "").get("", None)
+        )
 
     if battle.are_addresses_privates:
         for contender_info in contenders_infos:

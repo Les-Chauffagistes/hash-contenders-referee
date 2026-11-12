@@ -119,3 +119,23 @@ Les `BigInt` Prisma sont convertis en `string` par le formatter (`src/server/uti
 ## CORS
 
 Activé sur toutes les routes via `aiohttp_cors` (`src/server/cors.py`). Configuré dans `main.py` après l'ajout des routes.
+
+## Hashrate des contenders
+
+Le referee interroge `pool-api` via `GET /v1/stats/{adresse}` au démarrage,
+puis toutes les 30 secondes pour les combats actifs, une requête par adresse distincte.
+Configurer `STATS_API_URL` avec l’origine HTTP de pool-api (sans `/v1`) si elle diffère
+de `API_URL`, et éventuellement `STATS_API_TOKEN`. L’intervalle est configurable
+avec `HASHRATE_POLL_INTERVAL_SECONDS` (30 par défaut).
+
+Chaque entrée de `contender_info` du statut REST inclut :
+- `hashrate_hs` : estimation `hashrate1m` en H/s, total d’adresse ou worker ciblé ;
+- `hashrate_window_seconds` : 60, période de lissage ;
+- `hashrate_fetched_at` : date UTC de récupération réussie, pas date de mesure ckpool ;
+- `hashrate_stale` : vrai si absent, worker introuvable, ou récupération de plus de deux intervalles.
+
+Une panne conserve la dernière valeur connue. Une valeur absente vaut `null`,
+une mesure nulle vaut `0`. Le cache est en mémoire et n’ajoute aucun identifiant
+privé à la réponse. Les combats terminés ne sont plus collectés et leurs valeurs
+sont retirées au prochain passage. Le navigateur doit relire le statut REST pour
+obtenir les mesures actualisées ; aucun événement WebSocket hashrate n’est ajouté.

@@ -32,6 +32,7 @@ async def main():
 
     runner = web.AppRunner(app)
     listener_task = None
+    hashrate_task = None
     stop_task = None
     runner_started = False
 
@@ -53,20 +54,28 @@ async def main():
         Referee.log = log
         Referee.event_dispatcher = event_dispatcher
 
+        from src.rules.hashrate import HashratePoller
+
+        stats_url = settings.stats_api_url or settings.api_url.replace("wss://", "https://", 1).replace("ws://", "http://", 1)
+        poller = HashratePoller(stats_url, settings.stats_api_token or settings.api_token,
+                               settings.hashrate_poll_interval_seconds)
+        app["hashrate_poller"] = poller
+        hashrate_task = asyncio.create_task(poller.run(app["prisma"]))
         listener_task = asyncio.create_task(shares_listener())
         stop_task = asyncio.create_task(stop_event.wait())
         done, _ = await asyncio.wait(
-            (listener_task, stop_task),
+            (listener_task, hashrate_task, stop_task),
             return_when=asyncio.FIRST_COMPLETED,
         )
 
-        if listener_task in done:
-            await listener_task
+        for task in (listener_task, hashrate_task):
+            if task in done:
+                await task
     finally:
         for handled_signal in handled_signals:
             loop.remove_signal_handler(handled_signal)
 
-        tasks = [task for task in (listener_task, stop_task) if task is not None]
+        tasks = [task for task in (listener_task, hashrate_task, stop_task) if task is not None]
         for task in tasks:
             task.cancel()
         if tasks:
