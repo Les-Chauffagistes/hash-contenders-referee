@@ -14,11 +14,13 @@ async def ws_handler(request: Request):
         return web.HTTPBadRequest()
 
     ws = web.WebSocketResponse(heartbeat=20, autoping=True)
-    client_webosckets.add(battle_id, ws)
     await ws.prepare(request)
-
-    async for msg in ws:
-        if msg.type == web.WSMsgType.TEXT:
-            await ws.send_str("ack")
+    client_webosckets.add(battle_id, ws)
+    try:
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT and msg.data == "ping":
+                await ws.send_str("pong")
+    finally:
+        client_webosckets.remove(battle_id, ws)
 
     return ws
