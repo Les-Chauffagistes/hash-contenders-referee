@@ -2,7 +2,7 @@ from typing import NotRequired, TypedDict
 from prisma import Prisma
 from prisma.models import rounds
 from chauff_cmn.logging import logger as log
-from init import app, referee
+from init import app, referee, hashrate_fetch
 from src.server.utils.formatter import format_row, format_rows
 
 
@@ -12,6 +12,17 @@ class ContenderInfo(TypedDict):
     name: str
     worker: NotRequired[str | None]
     current_round_best_diff: int
+    hashrate: str | None
+
+
+def contender_hashrate(address: str, worker: str | None) -> str | None:
+    stats = hashrate_fetch.get_latest(address)
+    if stats is None:
+        return None
+    if not worker:
+        return stats.globalStats.hashrate1m
+    match = next((w for w in stats.workers if w.workername.rsplit('.', 1)[-1].casefold() == worker.casefold()), None)
+    return match.hashrate1m if match else None
 
 
 class BattleResponse(TypedDict):
@@ -55,6 +66,7 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
             "pv": contender_1_pv,
             "name": battle.contender_1_name,
             "worker": battle.contender_1_worker,
+            "hashrate": contender_hashrate(battle.contender_1_address, battle.contender_1_worker),
             "current_round_best_diff": best_diff1
         },
         {
@@ -62,6 +74,7 @@ async def get_battle_status(battle_id: int | str, include_hits: bool) -> BattleR
             "pv": contender_2_pv,
             "name": battle.contender_2_name,
             "worker": battle.contender_2_worker,
+            "hashrate": contender_hashrate(battle.contender_2_address, battle.contender_2_worker),
             "current_round_best_diff": best_diff2
         },
     ]
