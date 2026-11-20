@@ -217,7 +217,6 @@ class WebsocketWrapper:
         try:
             async with websockets.connect(
                 with_cursor(self.uri, start),
-                additional_headers={"Authorization": f"Bearer {settings.api_token}"},
                 max_size=10 * 1024 * 1024,  # 10MB pour les gros messages
             ) as ws:
                 self._ws = ws
