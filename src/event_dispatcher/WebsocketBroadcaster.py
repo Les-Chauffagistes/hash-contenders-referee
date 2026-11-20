@@ -53,7 +53,7 @@ class WebsocketBroadcaster:
             battle.id,
             {
                 "type": "HIT_RESULT",
-                "block_height": hex(block_height),
+                "block_height": block_height,
                 "winner": winner,
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "contender_1_best_diff": contender_1_best_diff,

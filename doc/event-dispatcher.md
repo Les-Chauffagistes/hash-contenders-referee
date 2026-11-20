@@ -15,6 +15,8 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 
 ### Événements émis
 
+`block_height` est toujours un entier JSON représentant la hauteur du bloc.
+
 #### `BEST_SHARE_UPDATE`
 Émis quand un contender soumet un share **avec une meilleure difficulté** que sa précédente sur le round courant.
 
@@ -23,7 +25,7 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
   "type": "BEST_SHARE_UPDATE",
   "user": "contender_1",
   "diff": 42000,
-  "block_height": "0x1a2b3c"
+  "block_height": 970429
 }
 ```
 
@@ -34,7 +36,7 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 {
   "type": "ROUND_UPDATE",
   "round": 3,
-  "block_height": "0x1a2b3c"
+  "block_height": 970429
 }
 ```
 
@@ -44,7 +46,7 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 ```json
 {
   "type": "HIT_RESULT",
-  "block_height": "0x1a2b3c",
+  "block_height": 970429,
   "winner": 1,
   "date": "2024-01-15 14:30:00",
   "contender_1_best_diff": 55000,
