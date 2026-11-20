@@ -1,6 +1,40 @@
 import pytest
+from types import SimpleNamespace
 from prisma import Prisma
-from src.server.core.status.v1 import get_battle_status
+from src.server.core.status.v1 import contender_hashrate, get_battle_status
+from src.server.core.status import v1 as status_v1
+
+
+@pytest.mark.parametrize(
+    ("worker", "expected"),
+    [
+        ("rig.1", "10T"),
+        ("RIG.1", "10T"),
+        ("1", "20T"),
+        ("addr.rig.1", "30T"),
+        ("missing", None),
+        (None, "60T"),
+        ("", "60T"),
+    ],
+)
+def test_contender_hashrate_matches_complete_worker_name(monkeypatch, worker, expected):
+    stats = SimpleNamespace(
+        globalStats=SimpleNamespace(hashrate1m="60T"),
+        workers=[
+            SimpleNamespace(workername="addr.rig.1", hashrate1m="10T"),
+            SimpleNamespace(workername="addr.1", hashrate1m="20T"),
+            SimpleNamespace(workername="addr.addr.rig.1", hashrate1m="30T"),
+        ],
+    )
+    monkeypatch.setattr(status_v1.hashrate_fetch, "get_latest", lambda address: stats)
+
+    assert contender_hashrate("addr", worker) == expected
+
+
+def test_contender_hashrate_without_cached_stats(monkeypatch):
+    monkeypatch.setattr(status_v1.hashrate_fetch, "get_latest", lambda address: None)
+
+    assert contender_hashrate("addr", "rig.1") is None
 
 
 async def _make_battle(prisma_tx: Prisma, **overrides):

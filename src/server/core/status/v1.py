@@ -21,7 +21,10 @@ def contender_hashrate(address: str, worker: str | None) -> str | None:
         return None
     if not worker:
         return stats.globalStats.hashrate1m
-    match = next((w for w in stats.workers if w.workername.rsplit('.', 1)[-1].casefold() == worker.casefold()), None)
+    match = next(
+        (w for w in stats.workers if w.workername.removeprefix(f"{address}.").casefold() == worker.casefold()),
+        None,
+    )
     return match.hashrate1m if match else None
 
 
