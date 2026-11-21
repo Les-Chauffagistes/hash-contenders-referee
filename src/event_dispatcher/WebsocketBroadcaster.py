@@ -7,6 +7,16 @@ from chauff_cmn.models import PoolUser, PoolWebsocketShareElement
 class WebsocketBroadcaster:
     client_websockets: ClientWebsockets
 
+    async def new_share(self, battle: battles, contender: str, payload: PoolWebsocketShareElement):
+        await self.client_websockets.broadcast(battle.id, {
+            "type": "SHARE",
+            "user": contender,
+            "diff": payload.sdiff,
+            "block_height": payload.block_height,
+            "share_id": payload.share_id,
+            "created_at": payload.created_at.isoformat(),
+        })
+
     async def hashrate_update(self, battle_id: int, address: str, data: PoolUser):
         await self.client_websockets.broadcast(
             battle_id,
@@ -43,7 +53,7 @@ class WebsocketBroadcaster:
             battle.id,
             {
                 "type": "HIT_RESULT",
-                "block_height": hex(block_height),
+                "block_height": block_height,
                 "winner": winner,
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "contender_1_best_diff": contender_1_best_diff,

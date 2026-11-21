@@ -436,6 +436,7 @@ class Referee:
             )
             return
 
+        await self.event_dispatcher.new_share(battle, contender, payload)
         rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)
         if rows:
             await self.event_dispatcher.new_best_share(battle, contender, payload)

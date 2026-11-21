@@ -9,9 +9,15 @@ class ClientWebsockets:
         self.__websockets: dict[int, list[WebSocketResponse]] = {}
     
     def add(self, battle_id: int | str, ws: WebSocketResponse):
-        if battle_id not in self.__websockets:
-            self.__websockets[int(battle_id)] = []
-        self.__websockets[int(battle_id)].append(ws)
+        self.__websockets.setdefault(int(battle_id), []).append(ws)
+
+    def remove(self, battle_id: int | str, ws: WebSocketResponse):
+        battle_id = int(battle_id)
+        sockets = self.__websockets.get(battle_id)
+        if sockets is not None and ws in sockets:
+            sockets.remove(ws)
+            if not sockets:
+                self.__websockets.pop(battle_id, None)
     
     async def broadcast(self, battle_id: int, data: dict[str, Any]):
         candidates = self.__websockets.get(battle_id, []).copy()
@@ -20,7 +26,7 @@ class ClientWebsockets:
                 await ws.send_json(data)
             except Exception:
                 log.warning("Failed to send message to client. Removing client...")
-                self.__websockets[battle_id].remove(ws)
+                self.remove(battle_id, ws)
                 await ws.close()
 
     async def close(self, battle_id: int):
