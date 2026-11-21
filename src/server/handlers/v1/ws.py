@@ -17,8 +17,9 @@ async def ws_handler(request: Request):
     await ws.prepare(request)
     client_webosckets.add(battle_id, ws)
     try:
-        async for _ in ws:
-            pass
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                await ws.send_str("ack")
     finally:
         client_webosckets.remove(battle_id, ws)
 
