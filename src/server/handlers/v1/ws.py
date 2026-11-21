@@ -17,9 +17,8 @@ async def ws_handler(request: Request):
     await ws.prepare(request)
     client_webosckets.add(battle_id, ws)
     try:
-        async for msg in ws:
-            if msg.type == web.WSMsgType.TEXT and msg.data == "ping":
-                await ws.send_str("pong")
+        async for _ in ws:
+            pass
     finally:
         client_webosckets.remove(battle_id, ws)
 
