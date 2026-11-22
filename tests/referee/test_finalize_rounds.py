@@ -130,3 +130,31 @@ async def test_multiple_rounds_finalized_at_once(prisma_tx: Prisma, referee: Ref
     assert by_height[400]["winner"] == 1  # 200 > 100
     assert by_height[401]["winner"] == 2  # 150 < 180
     assert by_height[402]["winner"] == 1  # 120 > 90
+
+@pytest.mark.asyncio
+async def test_round_with_single_contender_has_no_winner(prisma_tx: Prisma, referee: Referee):
+    """Un round où un seul contender a soumis est clos sans gagnant, même si
+    les deux ont soumis sur des rounds ultérieurs (non-régression battle #40)"""
+    battle = await create_battle(prisma_tx)
+    referee.event_dispatcher = AsyncMock()
+
+    # 400 et 401 : seul C1 ; 402 : seul C2 ; 403 : les deux
+    for block, c1, c2 in [(400, 200, 0), (401, 100, 0), (402, 0, 150), (403, 100, 100)]:
+        await prisma_tx.rounds.create(
+            data={"battle_id": battle.id, "block_height": block,
+                  "contender_1_best_diff": c1, "contender_2_best_diff": c2}
+        )
+
+    finalized = await referee.finalize_rounds(battle.id, 404)
+
+    by_height = {r["block_height"]: r for r in finalized}
+    assert set(by_height.keys()) == {400, 401, 402}
+    assert all(r["winner"] is None for r in by_height.values())
+
+    # Le round reste en base, finalisé, et ne compte pas dans les PV
+    round_400 = await prisma_tx.rounds.find_unique(
+        where={"battle_id_block_height": {"battle_id": battle.id, "block_height": 400}}
+    )
+    assert round_400.finalized_at is not None
+    assert round_400.winner is None
+    assert await referee.compute_pv(battle) == (battle.contenders_pv, battle.contenders_pv)
