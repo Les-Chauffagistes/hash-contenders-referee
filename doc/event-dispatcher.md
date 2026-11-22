@@ -15,6 +15,8 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 
 ### Événements émis
 
+`block_height` est toujours un entier JSON représentant la hauteur du bloc.
+
 #### `BEST_SHARE_UPDATE`
 Émis quand un contender soumet un share **avec une meilleure difficulté** que sa précédente sur le round courant.
 
@@ -23,9 +25,21 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
   "type": "BEST_SHARE_UPDATE",
   "user": "contender_1",
   "diff": 42000,
-  "block_height": "0x1a2b3c"
+  "block_height": 970429
 }
 ```
+
+#### `HASHRATE_UPDATE`
+Émis quand le hashrate du pool d'un contender change (polling toutes les 15 s). Un message par contender concerné.
+
+```json
+{
+  "type": "HASHRATE_UPDATE",
+  "user": "contender_1",
+  "hashrate": "60T"
+}
+```
+> `hashrate` = hashrate 1 minute du worker ciblé (ou de toute l'adresse si le contender n'a pas de worker), `null` si inconnu. Comme pour les autres événements, le contender est désigné par `contender_1`/`contender_2` : l'adresse du pool et la liste de ses workers ne sont **jamais** diffusées (battles avec `are_addresses_privates`).
 
 #### `ROUND_UPDATE`
 Émis quand un **nouveau round** est créé (premier share sur un nouveau block height).
@@ -34,7 +48,7 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 {
   "type": "ROUND_UPDATE",
   "round": 3,
-  "block_height": "0x1a2b3c"
+  "block_height": 970429
 }
 ```
 
@@ -44,7 +58,7 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 ```json
 {
   "type": "HIT_RESULT",
-  "block_height": "0x1a2b3c",
+  "block_height": 970429,
   "winner": 1,
   "date": "2024-01-15 14:30:00",
   "contender_1_best_diff": 55000,

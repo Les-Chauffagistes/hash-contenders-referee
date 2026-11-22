@@ -119,12 +119,15 @@ class Referee:
         # Un round n est finalisé uniquement quand les deux contenders ont soumis
         # pour un block supérieur à n, évitant de clore un round avant que le pool
         # adverse ait eu le temps d'envoyer ses shares.
+        # Si l'un des deux n'a aucun share sur le round lui-même, le block est
+        # ignoré : le round est clos sans gagnant (winner NULL).
         rows = await self.prisma.query_raw(
             """
             UPDATE rounds
             SET
                 finalized_at = NOW(),
                 winner = CASE
+                    WHEN contender_1_best_diff = 0 OR contender_2_best_diff = 0 THEN NULL
                     WHEN contender_1_best_diff > contender_2_best_diff THEN 1
                     WHEN contender_2_best_diff > contender_1_best_diff THEN 2
                     ELSE NULL
@@ -436,6 +439,7 @@ class Referee:
             )
             return
 
+        await self.event_dispatcher.new_share(battle, contender, payload)
         rows = await self.prisma.execute_raw(query, battle.id, int(payload.sdiff), block_height)
         if rows:
             await self.event_dispatcher.new_best_share(battle, contender, payload)
