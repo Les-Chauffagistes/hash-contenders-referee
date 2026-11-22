@@ -8,6 +8,17 @@ from chauff_cmn.callers.pools import PoolAPIClient
 POLL_INTERVAL_SECONDS = 15
 
 
+def worker_hashrate(stats: PoolStats, address: str, worker: str | None) -> str | None:
+    """Hashrate 1m d'un contender : celui du worker ciblé, sinon celui de toute l'adresse."""
+    if not worker:
+        return stats.globalStats.hashrate1m
+    match = next(
+        (w for w in stats.workers if w.workername.removeprefix(f"{address}.").casefold() == worker.casefold()),
+        None,
+    )
+    return match.hashrate1m if match else None
+
+
 class HashrateFetch:
     """Poll le hashrate d'une adresse pool en tâche de fond, une seule tâche par
     adresse quel que soit le nombre de battles/contenders qui l'utilisent.
@@ -22,7 +33,8 @@ class HashrateFetch:
 
     def __init__(self):
         self._tasks: dict[str, asyncio.Task] = {}
-        self._subscribers: dict[str, set[int]] = {}
+        # adresse -> battle_id -> [(contender, worker)] : ce que la battle suit sur cette adresse
+        self._subscribers: dict[str, dict[int, list[tuple[str, str | None]]]] = {}
         self._latest: dict[str, PoolStats] = {}
 
     def get_latest(self, address: str) -> PoolStats | None:
@@ -30,12 +42,19 @@ class HashrateFetch:
         par l'API HTTP à la demande."""
         return self._latest.get(address)
 
-    def acquire(self, address: str, battle_id: int) -> None:
-        """Abonne `battle_id` au polling de `address`, en démarrant la tâche de
+    def acquire(self, address: str, battle) -> None:
+        """Abonne `battle` au polling de `address`, en démarrant la tâche de
         fetch si c'est le premier abonné. Idempotent : peut être rappelé sans
-        risque pour une battle déjà abonnée."""
-        subscribers = self._subscribers.setdefault(address, set())
-        subscribers.add(battle_id)
+        risque pour une battle déjà abonnée.
+
+        On retient les contenders de la battle qui utilisent cette adresse : seul
+        leur hashrate est diffusé, jamais l'adresse ni les workers du pool."""
+        targets = [
+            (f"contender_{number}", getattr(battle, f"contender_{number}_worker") or None)
+            for number in (1, 2)
+            if getattr(battle, f"contender_{number}_address") == address
+        ]
+        self._subscribers.setdefault(address, {})[battle.id] = targets
         if address not in self._tasks:
             log.info(f"Starting hashrate poll for {address}")
             self._tasks[address] = asyncio.create_task(self._poll(address))
@@ -48,7 +67,7 @@ class HashrateFetch:
         if subscribers is None:
             return
 
-        subscribers.discard(battle_id)
+        subscribers.pop(battle_id, None)
         if subscribers:
             return
 
@@ -92,5 +111,8 @@ class HashrateFetch:
     async def _broadcast(self, address: str, data: PoolStats) -> None:
         if self.event_dispatcher is None:
             return
-        for battle_id in self._subscribers.get(address, ()):
-            await self.event_dispatcher.hashrate_update(battle_id, address, data)
+        for battle_id, targets in list(self._subscribers.get(address, {}).items()):
+            for contender, worker in targets:
+                await self.event_dispatcher.hashrate_update(
+                    battle_id, contender, worker_hashrate(data, address, worker)
+                )

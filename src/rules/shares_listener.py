@@ -62,7 +62,7 @@ async def shares_listener():
                         streams = contender_streams(battle)
                         addresses = dict.fromkeys(stream.address for stream in streams)
                         for address in addresses:
-                            hashrate_fetch.acquire(address, battle.id)
+                            hashrate_fetch.acquire(address, battle)
                         connections: list[tuple[WebsocketWrapper, Task]] = []
                         for stream in streams:
                             ws = WebsocketWrapper(

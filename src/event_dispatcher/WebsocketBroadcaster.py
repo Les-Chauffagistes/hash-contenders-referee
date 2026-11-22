@@ -1,7 +1,7 @@
 from datetime import datetime
 from state import ClientWebsockets
 from prisma.models import battles
-from chauff_cmn.models import PoolUser, PoolWebsocketShareElement
+from chauff_cmn.models import PoolWebsocketShareElement
 
 
 class WebsocketBroadcaster:
@@ -17,13 +17,13 @@ class WebsocketBroadcaster:
             "created_at": payload.created_at.isoformat(),
         })
 
-    async def hashrate_update(self, battle_id: int, address: str, data: PoolUser):
+    async def hashrate_update(self, battle_id: int, contender: str, hashrate: str | None):
         await self.client_websockets.broadcast(
             battle_id,
             {
                 "type": "HASHRATE_UPDATE",
-                "address": address,
-                "hashrate": data.model_dump(exclude={"worker"}),
+                "user": contender,
+                "hashrate": hashrate,
             },
         )
 

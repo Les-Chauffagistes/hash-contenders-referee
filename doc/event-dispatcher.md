@@ -29,6 +29,18 @@ event_dispatcher.client_websockets = client_webosckets  # ClientWebsockets
 }
 ```
 
+#### `HASHRATE_UPDATE`
+Émis quand le hashrate du pool d'un contender change (polling toutes les 15 s). Un message par contender concerné.
+
+```json
+{
+  "type": "HASHRATE_UPDATE",
+  "user": "contender_1",
+  "hashrate": "60T"
+}
+```
+> `hashrate` = hashrate 1 minute du worker ciblé (ou de toute l'adresse si le contender n'a pas de worker), `null` si inconnu. Comme pour les autres événements, le contender est désigné par `contender_1`/`contender_2` : l'adresse du pool et la liste de ses workers ne sont **jamais** diffusées (battles avec `are_addresses_privates`).
+
 #### `ROUND_UPDATE`
 Émis quand un **nouveau round** est créé (premier share sur un nouveau block height).
 

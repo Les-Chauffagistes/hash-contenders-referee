@@ -3,6 +3,7 @@ from prisma import Prisma
 from prisma.models import rounds
 from chauff_cmn.logging import logger as log
 from init import app, referee, hashrate_fetch
+from src.rules.hashrate_fetch import worker_hashrate
 from src.server.utils.formatter import format_row, format_rows
 
 
@@ -19,13 +20,7 @@ def contender_hashrate(address: str, worker: str | None) -> str | None:
     stats = hashrate_fetch.get_latest(address)
     if stats is None:
         return None
-    if not worker:
-        return stats.globalStats.hashrate1m
-    match = next(
-        (w for w in stats.workers if w.workername.removeprefix(f"{address}.").casefold() == worker.casefold()),
-        None,
-    )
-    return match.hashrate1m if match else None
+    return worker_hashrate(stats, address, worker)
 
 
 class BattleResponse(TypedDict):
